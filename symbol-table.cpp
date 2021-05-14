@@ -1,4 +1,4 @@
-#include "symbol-table.h"
+#include "parser.h"
 
 void Symbol_Table::insert(std::string symbol, Parse_Node *node) {
   table.insert(std::pair<std::string, Parse_Node *>(symbol, node));  
@@ -13,8 +13,7 @@ Parse_Node *Symbol_Table::lookup(std::string symbol) {
   } else if (parent_table != nullptr) {
     return parent_table->lookup(symbol);
   } else {
+    fprintf(stderr, "Error: unbound symbol: `%s`\n", symbol.c_str());
     return nullptr;    
   }
 }
-
-

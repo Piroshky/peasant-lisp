@@ -32,10 +32,14 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < parse.top_level_expressions.size(); i++) {
     // parse.top_level_expressions[i].debug_print_parse_node();
     printf("> ");
-    parse.top_level_expressions[i].print_parse_node();
+    std::cout << parse.top_level_expressions[i].print_parse_node();
     printf("\n");
-    eval_parse_node(&parse.top_level_expressions[i], &env)->print_parse_node();
-    printf("\n\n");
+    Parse_Node *evaled = eval_parse_node(&parse.top_level_expressions[i], &env);
+    if (evaled != nullptr) {
+      std::cout << evaled->print_parse_node();
+      printf("\n");
+    }
+    printf("\n");
   }
   
   return 0;  

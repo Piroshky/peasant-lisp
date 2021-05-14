@@ -29,17 +29,83 @@ Parse_Node *apply_function(Parse_Node *node, Symbol_Table *env) {
   Parse_Node *func_sym = &node->list_items[0];
 
   if (func_sym->type != PARSE_NODE_SYMBOL) {
-    // error illegal function call    
+    fprintf(stderr, "function call error: not a function\n");
+    return nullptr;
   }
 
   Parse_Node *func = env->lookup(func_sym->token.name);
 
   if (func == nullptr) {
-    // function not found
+
+    return nullptr;
   }
 
-  return func->val.func(node, env);
-    
+  if (func->type != PARSE_NODE_FUNCTION) {
+    fprintf(stderr, "Error: `%s` is not a function.\n", func_sym->token.name.c_str());
+    return nullptr;
+  }
+
+  return func->val.func(node, env);    
+}
+
+Parse_Node *builtin_let(Parse_Node *args, Symbol_Table *env) {
+  if (args->list_items.size() < 2) {
+    fprintf(stderr, "Error: too few arguments in `let`\n");
+    return nullptr;
+  }
+
+  Symbol_Table *let_env = new Symbol_Table(env);
+  Parse_Node *defs = &args->list_items[1];
+
+  for (int i = 0; i < defs->list_items.size(); ++i) {
+    Parse_Node *let_form = &defs->list_items[i];
+
+    switch (let_form->type) {
+    case PARSE_NODE_LIST: {
+
+      int lfs = let_form->list_items.size();
+      if (lfs != 2 && lfs != 1) {
+	fprintf(stderr, "Error: invalid let binding: %s\n"
+		"     : let form length %d\n"
+		, let_form->print_parse_node().c_str(), lfs);
+	return nullptr;
+      }
+     
+      Parse_Node *sym = &let_form->list_items[0];
+
+      if (sym->type != PARSE_NODE_SYMBOL) {
+	fprintf(stderr, "Error: invalid let binding: `%s` is not a symbol\n", sym->print_parse_node());
+	return nullptr;
+      }
+      
+      if (lfs == 1) {
+
+      } else {
+	let_env->table[sym->token.name] = eval_parse_node(&let_form->list_items[1], let_env);
+      }      
+      break;
+    }
+    case PARSE_NODE_SYMBOL: {
+      let_env->table[let_form->token.name] = new Parse_Node{PARSE_NODE_LIST};      
+      break;
+    }
+    default: {
+      fprintf(stderr, "Error: invalid let binding: %s\n", let_form->print_parse_node().c_str());
+      return nullptr;
+      break;
+    }
+    }
+  }
+
+  if (args->list_items.size() == 2) {
+    return new Parse_Node{PARSE_NODE_LIST};
+  }
+
+  Parse_Node *ret;
+  for (int i = 2; i < args->list_items.size(); ++i) {
+    ret = eval_parse_node(&args->list_items[i], let_env);
+  }
+  return ret;  
 }
 
 Parse_Node *builtin_add(Parse_Node *args, Symbol_Table *env) {
@@ -159,6 +225,7 @@ Symbol_Table create_base_environment() {
   create_builtin("+", builtin_add, &env);
   create_builtin("*", builtin_multiply, &env);
   create_builtin("defsym", builtin_defsym, &env);
+  create_builtin("let", builtin_let, &env);
 
   return env;
 }

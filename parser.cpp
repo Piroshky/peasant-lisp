@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 #include "parser.h"
 
 const char *parse_node_types[] = {
@@ -90,45 +91,47 @@ Parse_Node Parser::parse_list(Token start) {
   return list;
 }
 
-void Parse_Node::print_parse_node() {
+std::string Parse_Node::print_parse_node() {
 
   switch (type) {
   case PARSE_NODE_LIST: {
-    printf("(");
+    std::string list = "(";
     for(int i = 0; i < list_items.size(); ++i) {
-      list_items[i].print_parse_node();
+      list += list_items[i].print_parse_node();
       if (i < list_items.size()-1) {
-	printf(" ");
+	list += " ";
       }
     }
-    printf(")");
+    list += ")";
+    return list;
     break;
   }
     
   case PARSE_NODE_SYMBOL: {
-    std::cout << token.name;
-    // printf("%s", token.name);
+    return token.name;
     break;
   }
 
   case PARSE_NODE_LITERAL: {
     switch (subtype) {
     case LITERAL_INTEGER: {
-      printf("%d", val.u64);
+      return std::to_string(val.u64);
       break;
     }
     case LITERAL_FLOAT: {
-      printf("%f", val.dub);
+      return std::to_string(val.dub);
       break;
     }
     case LITERAL_STRING: {
-      printf("\"stringvalue goes here\"");
+      return "PRINT STRING LITERAL NOT IMPLREMENTED";
       break;
     }
     }
   }
-
-  } 
+  default:
+    fprintf(stderr, "Tried to print unknown symbol type\n");
+    exit(1);
+  }
 }
 
 
@@ -145,6 +148,6 @@ void Parse_Node::debug_print_parse_node() {
   } 
 }
 
-void print_parse_node_type(Parse_Node_Type t) {
-  printf("%s", parse_node_types[t]);
+std::string print_parse_node_type(Parse_Node_Type t) {
+  return parse_node_types[t];  
 }

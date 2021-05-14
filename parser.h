@@ -15,7 +15,7 @@ enum Parse_Node_Type {
   PARSE_NODE_FUNCTION
 };
 
-void print_parse_node_type(Parse_Node_Type);
+std::string print_parse_node_type(Parse_Node_Type);
 
 enum Parse_Node_Subtype {
   SYMBOL_FUNCTION,
@@ -46,7 +46,7 @@ struct Parse_Node {
 
   int nesting_depth = 0;
   
-  void print_parse_node();
+  std::string print_parse_node();
   void debug_print_parse_node();
 };
 
@@ -73,6 +73,9 @@ struct Symbol_Table {
   Symbol_Table *parent_table = nullptr;
 
   Symbol_Table() {}
+  Symbol_Table(Symbol_Table *parent) {
+    parent_table = parent;
+  }
 
   Parse_Node lookup();
   void insert(std::string symbol, Parse_Node *node);
