@@ -92,7 +92,7 @@ Parse_Node *Parser::parse_list(Token start) {
     t = lex.peek_next_token();    
   }
   current_depth--;
-  lex.next_token(); // eat right parenthesis  
+  lex.next_token(); // eat right parenthesis
   return list;
 }
 
@@ -148,10 +148,14 @@ std::string Parse_Node::print() {
       break;
     }
     case LITERAL_BOOLEAN: {
-      return (val.b == true ? "true" : "false");
+      return (val.b ? "true" : "false");
       break;
     }
     }
+  }
+  case PARSE_NODE_FUNCTION: {
+    return token.name;
+    break;
   }
   default:
     fprintf(stderr, "Tried to print unknown symbol type\n");
@@ -183,4 +187,8 @@ void Parse_Node::debug_print_parse_node() {
 
 std::string print_parse_node_type(Parse_Node_Type t) {
   return parse_node_types[t];  
+}
+
+const char * Parse_Node::print_type() {
+  return print_parse_node_type(type).c_str();
 }

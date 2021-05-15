@@ -52,6 +52,7 @@ struct Parse_Node {
   std::string print();
   const char * cprint();
   void debug_print_parse_node();
+  const char *print_type();
   int length();
 };
 

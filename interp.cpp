@@ -1,5 +1,8 @@
 #include "interp.h"
 
+Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env);
+Parse_Node *apply_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
+
 Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
   switch (node->type) {
   case PARSE_NODE_LITERAL: {
@@ -7,44 +10,118 @@ Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
   }
 
   case PARSE_NODE_LIST: {
-    return apply_function(node, env);
+    return eval_list(node, env);
     break;
   }
     
   case PARSE_NODE_SYMBOL: {
     return env->lookup(node->token.name);
     break;
-  }
-    
-  }
-  
+  }    
+  }  
   return nullptr;
 }
 
-Parse_Node *apply_function(Parse_Node *node, Symbol_Table *env) {
+Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
+  // The empty list evaluates to itself
   if (node->first == nullptr) {
     return node;
   }
 
   Parse_Node *func_sym = node->first;
-
   if (func_sym->type != PARSE_NODE_SYMBOL) {
-    fprintf(stderr, "function call error: not a function\n");
+    fprintf(stderr, "Error: invalid function call, %s is not a symbol\n", func_sym->cprint());
     return nullptr;
   }
 
   Parse_Node *func = env->lookup(func_sym->token.name);
-
   if (func == nullptr) {
+    fprintf(stderr, "Error: could not find function or macro named %s\n", func_sym->cprint());
+    return nullptr;
+  }
+  
+  switch (func->subtype) {
+  case FUNCTION_BUILTIN: {
+    return func->val.func(node->next, env);
+    break;
+  }
+  case FUNCTION_MACRO: {
+    return apply_macro(func, node, env);
+    break;
+  }
+  default: {
+    fprintf(stderr, "Error: function type not recognized\n");
+    return nullptr;
+    break;
+  }
+  }  
+}
+
+Parse_Node *apply_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {
+  Symbol_Table *macro_env = new Symbol_Table(env);
+  
+  // bind given arguments to symbols in macro-args
+  Parse_Node *cur_param = macro->first;
+  Parse_Node *cur_arg = node->next;
+  while (cur_param->first != nullptr) {
+    Parse_Node *param = cur_param->first;
+    Parse_Node *arg = cur_arg->first;
+    switch(param->type) {
+    case PARSE_NODE_SYMBOL: {
+      macro_env->table[param->token.name] = arg;
+      break;
+    }
+    default: {
+      fprintf(stderr, "Shouldn't reach here\n");
+      fprintf(stderr, "cur_param: %s\n", cur_param->cprint());
+      fprintf(stderr, "arg type: %s\n", arg->print_type());
+      fprintf(stderr, "param type: %s\n", param->print_type());
+      fprintf(stderr, "arg: %s\n", arg->cprint());
+      fprintf(stderr, "param: %s\n", param->cprint());
+      return nullptr;
+      break;
+    }
+    }
+    cur_param = cur_param->next;
+    cur_arg = cur_arg->next;
+  }
+
+  Parse_Node *cur = macro->next;
+  Parse_Node *ret;
+  while (cur->first != nullptr) {
+    ret = eval_parse_node(cur->first, macro_env);
+    cur = cur->next;
+  }
+  
+  return ret;
+}
+
+Parse_Node *builtin_defmacro(Parse_Node *args, Symbol_Table *env) {
+  int nargs = args->length();
+  if (nargs < 2) {
+    fprintf(stderr, "Error: defmacro requires a macro-name argument, and an macro-args argument\n");
     return nullptr;
   }
 
-  if (func->type != PARSE_NODE_FUNCTION) {
-    fprintf(stderr, "Error: `%s` is not a function.\n", func_sym->token.name.c_str());
+  Parse_Node *macro_name = args->first;
+  if (macro_name->type != PARSE_NODE_SYMBOL) {
+    fprintf(stderr, "Error: argument macro-name requires a symbol\n");
     return nullptr;
   }
 
-  return func->val.func(node->next, env);
+  Parse_Node *macro_args = args->next->first;
+  if (macro_args->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: argument macro-args requires a list\n");
+    return nullptr;
+  }
+
+  Parse_Node *new_macro = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_MACRO};
+  new_macro->token = macro_name->token;
+  new_macro->first = macro_args; //reuse the cons cells slots
+  new_macro->next = args->next->next;
+  
+  env->table[macro_name->token.name] = new_macro;
+  return new_macro;
 }
 
 Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
@@ -61,7 +138,7 @@ Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
     return nullptr;
   }
   
-  std::map<std::string, Parse_Node *>::iterator it;
+  // std::map<std::string, Parse_Node *>::iterator it;
   // it = env.table.find(sym.token.name);
   // if (it == env.table.end()) {
   //   //
@@ -761,26 +838,31 @@ Symbol_Table create_base_environment() {
   env.insert("true", tru);
   env.insert("false", fal);
 
-  create_builtin("+", builtin_add, &env);
-  create_builtin("*", builtin_multiply, &env);
+  create_builtin("defmacro", builtin_defmacro, &env);
   create_builtin("defsym", builtin_defsym, &env);
   create_builtin("let", builtin_let, &env);
   create_builtin("progn", builtin_progn, &env);
   create_builtin("if", builtin_if, &env);
+
+  create_builtin("+", builtin_add, &env);
+  create_builtin("*", builtin_multiply, &env);
+  
   create_builtin("=", builtin_equal, &env);
   create_builtin("<", builtin_less_than, &env);
   create_builtin("<=", builtin_less_than_equal, &env);
   create_builtin(">", builtin_greater_than, &env);
   create_builtin(">=", builtin_greater_than_equal, &env);
+
+  create_builtin("and", builtin_and, &env);
+  create_builtin("or", builtin_or, &env);
+  create_builtin("not", builtin_not, &env);
+  
   create_builtin("&", builtin_bitand, &env);
   create_builtin("|", builtin_bitor, &env);
   create_builtin("^", builtin_bitxor, &env);
   create_builtin("~", builtin_bitnot, &env);
   create_builtin("<<", builtin_bitshift_left, &env);
   create_builtin(">>", builtin_bitshift_right, &env);
-  create_builtin("and", builtin_and, &env);
-  create_builtin("or", builtin_or, &env);
-  create_builtin("not", builtin_not, &env);
 
   return env;
 }
