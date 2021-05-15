@@ -25,6 +25,7 @@ enum Parse_Node_Subtype {
   LITERAL_INTEGER,
   LITERAL_FLOAT,
   LITERAL_STRING,
+  LITERAL_BOOLEAN,
 
   FUNCTION_MACRO,
   FUNCTION_BUILTIN,
@@ -39,11 +40,12 @@ struct Parse_Node {
   std::vector<Parse_Node> list_items = {};
   
   union {
+    bool b;
     int64_t u64;
     double dub;
     Parse_Node *(*func)(Parse_Node *, Symbol_Table *);
   } val;
-
+  
   int nesting_depth = 0;
   
   std::string print_parse_node();
@@ -65,7 +67,6 @@ struct Parser {
   Parse_Node parse_next_token();
   Parse_Node parse_list(Token start);
 };
-
 
 struct Symbol_Table {
 

@@ -123,7 +123,11 @@ std::string Parse_Node::print_parse_node() {
       break;
     }
     case LITERAL_STRING: {
-      return "PRINT STRING LITERAL NOT IMPLREMENTED";
+      return "PRINT STRING LITERAL NOT IMPLEMENTED";
+      break;
+    }
+    case LITERAL_BOOLEAN: {
+      return (val.b == true ? "true" : "false");
       break;
     }
     }
