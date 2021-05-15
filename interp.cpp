@@ -522,6 +522,228 @@ Parse_Node *builtin_not(Parse_Node *args, Symbol_Table *env) {
   return tru;
 }
 
+Parse_Node *builtin_bitand(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 2) {
+    fprintf(stderr, "Error: takes 2+ arguments\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+
+  if(!is_number(earg)) {
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    return nullptr;
+  }
+  
+  int64_t val;
+  if (earg->subtype == LITERAL_INTEGER) {
+    val = earg->val.u64;
+  } else {
+    val = *((int64_t *)(&earg->val.dub));
+  }
+
+  Parse_Node *cur = args->next;
+  while (cur->first != nullptr) {
+    earg = eval_parse_node(cur->first, env);
+
+    if(!is_number(earg)) {
+      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->cprint());
+      return nullptr;
+    }
+    
+    if (earg->subtype == LITERAL_INTEGER) {
+      val &= earg->val.u64;
+    } else {
+      val &= *((int64_t *)(&earg->val.dub));
+    }
+    cur = cur->next;
+  }
+  Parse_Node *r = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER};
+  r->val.u64 = val;
+  return r;
+}
+
+Parse_Node *builtin_bitor(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 2) {
+    fprintf(stderr, "Error: takes 2+ arguments\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+
+  if(!is_number(earg)) {
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    return nullptr;
+  }
+  
+  int64_t val;
+  if (earg->subtype == LITERAL_INTEGER) {
+    val = earg->val.u64;
+  } else {
+    val = *((int64_t *)(&earg->val.dub));
+  }
+
+  Parse_Node *cur = args->next;
+  while (cur->first != nullptr) {
+    earg = eval_parse_node(cur->first, env);
+
+    if(!is_number(earg)) {
+      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->cprint());
+      return nullptr;
+    }
+    
+    if (earg->subtype == LITERAL_INTEGER) {
+      val |= earg->val.u64;
+    } else {
+      val |= *((int64_t *)(&earg->val.dub));
+    }
+    cur = cur->next;
+  }
+  Parse_Node *r = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER};
+  r->val.u64 = val;
+  return r;
+}
+
+Parse_Node *builtin_bitxor(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 2) {
+    fprintf(stderr, "Error: takes 2+ arguments\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+
+  if(!is_number(earg)) {
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    return nullptr;
+  }
+  
+  int64_t val;
+  if (earg->subtype == LITERAL_INTEGER) {
+    val = earg->val.u64;
+  } else {
+    val = *((int64_t *)(&earg->val.dub));
+  }
+
+  Parse_Node *cur = args->next;
+  while (cur->first != nullptr) {
+    earg = eval_parse_node(cur->first, env);
+
+    if(!is_number(earg)) {
+      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->cprint());
+      return nullptr;
+    }
+    
+    if (earg->subtype == LITERAL_INTEGER) {
+      val ^= earg->val.u64;
+    } else {
+      val ^= *((int64_t *)(&earg->val.dub));
+    }
+    cur = cur->next;
+  }
+  Parse_Node *r = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER};
+  r->val.u64 = val;
+  return r;
+}
+
+Parse_Node *builtin_bitnot(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 1) {
+    fprintf(stderr, "Error: takes 1 argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+
+  if(!is_number(earg)) {
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    return nullptr;
+  }
+  
+  int64_t val;
+  if (earg->subtype == LITERAL_INTEGER) {
+    val = ~earg->val.u64;
+  } else {
+    val = ~*((int64_t *)(&earg->val.dub));
+  }
+
+  Parse_Node *r = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER};
+  r->val.u64 = val;
+  return r;
+}
+
+Parse_Node *builtin_bitshift_left(Parse_Node *args, Symbol_Table *env) {
+  int nargs = args->length();
+  if (nargs != 2 && nargs != 1) {
+    fprintf(stderr, "Error: takes 1 or 2 arguments\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+
+  if(!is_number(earg)) {
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    return nullptr;
+  }
+  
+  int64_t val;
+  if (earg->subtype == LITERAL_INTEGER) {
+    val = earg->val.u64;
+  } else {
+    val = *((int64_t *)(&earg->val.dub));
+  }
+
+  if (nargs == 1) {
+    val <<= 1; 
+  } else {
+    Parse_Node *earg = eval_parse_node(args->next->first, env);
+    if(earg->subtype != LITERAL_INTEGER) {
+      fprintf(stderr, "Error: argument %s is not an integer\n", args->next->first->cprint());
+      return nullptr;
+    }
+    val <<= earg->val.u64;    
+  }
+
+  Parse_Node *r = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER};
+  r->val.u64 = val;
+  return r;
+}
+
+Parse_Node *builtin_bitshift_right(Parse_Node *args, Symbol_Table *env) {
+  int nargs = args->length();
+  if (nargs != 2 && nargs != 1) {
+    fprintf(stderr, "Error: takes 1 or 2 arguments\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+
+  if(!is_number(earg)) {
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    return nullptr;
+  }
+  
+  int64_t val;
+  if (earg->subtype == LITERAL_INTEGER) {
+    val = earg->val.u64;
+  } else {
+    val = *((int64_t *)(&earg->val.dub));
+  }
+
+  if (nargs == 1) {
+    val >>= 1; 
+  } else {
+    Parse_Node *earg = eval_parse_node(args->next->first, env);
+    if(earg->subtype != LITERAL_INTEGER) {
+      fprintf(stderr, "Error: argument %s is not an integer\n", args->next->first->cprint());
+      return nullptr;
+    }
+    val >>= earg->val.u64;    
+  }
+
+  Parse_Node *r = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER};
+  r->val.u64 = val;
+  return r;
+}
+
 void create_builtin(std::string symbol, Parse_Node *(*func)(Parse_Node *, Symbol_Table *), Symbol_Table *env) {
   Parse_Node *f = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_BUILTIN};
   f->val.func = func;
@@ -550,6 +772,12 @@ Symbol_Table create_base_environment() {
   create_builtin("<=", builtin_less_than_equal, &env);
   create_builtin(">", builtin_greater_than, &env);
   create_builtin(">=", builtin_greater_than_equal, &env);
+  create_builtin("&", builtin_bitand, &env);
+  create_builtin("|", builtin_bitor, &env);
+  create_builtin("^", builtin_bitxor, &env);
+  create_builtin("~", builtin_bitnot, &env);
+  create_builtin("<<", builtin_bitshift_left, &env);
+  create_builtin(">>", builtin_bitshift_right, &env);
   create_builtin("and", builtin_and, &env);
   create_builtin("or", builtin_or, &env);
   create_builtin("not", builtin_not, &env);
