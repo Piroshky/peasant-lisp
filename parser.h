@@ -36,8 +36,6 @@ struct Parse_Node {
   Parse_Node_Type type;
   Parse_Node_Subtype subtype;
   Token token;
-
-  std::vector<Parse_Node> list_items = {};
   
   union {
     bool b;
@@ -45,15 +43,20 @@ struct Parse_Node {
     double dub;
     Parse_Node *(*func)(Parse_Node *, Symbol_Table *);
   } val;
+
+  Parse_Node *first = nullptr;
+  Parse_Node *next;
   
   int nesting_depth = 0;
   
-  std::string print_parse_node();
+  std::string print();
+  const char * cprint();
   void debug_print_parse_node();
+  int length();
 };
 
 struct Parser {
-  std::vector<Parse_Node> top_level_expressions = {};
+  std::vector<Parse_Node*> top_level_expressions = {};
   Parse_Node current;
   Lexer lex;
 
@@ -64,8 +67,8 @@ struct Parser {
   }
   
   void parse_top_level_expressions();
-  Parse_Node parse_next_token();
-  Parse_Node parse_list(Token start);
+  Parse_Node *parse_next_token();
+  Parse_Node *parse_list(Token start);
 };
 
 struct Symbol_Table {
@@ -77,8 +80,7 @@ struct Symbol_Table {
   Symbol_Table(Symbol_Table *parent) {
     parent_table = parent;
   }
-
-  Parse_Node lookup();
+  
   void insert(std::string symbol, Parse_Node *node);
   Parse_Node *lookup(std::string symbol);
 };

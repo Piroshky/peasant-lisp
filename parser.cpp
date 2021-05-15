@@ -14,18 +14,18 @@ const char *parse_node_types[] = {
 void Parser::parse_top_level_expressions() {
   Token t = lex.peek_next_token();
   while (t.type != TOKEN_END_OF_FILE) {
-    Parse_Node new_node = parse_next_token();
+    Parse_Node *new_node = parse_next_token();
     top_level_expressions.push_back(new_node);
     t = lex.peek_next_token();
   }
 }
 
-Parse_Node Parser::parse_next_token() {
+Parse_Node *Parser::parse_next_token() {
   Token t = lex.next_token();
   
   switch (t.type) {
   case TOKEN_L_PAREN: {
-    Parse_Node list = parse_list(t);
+    Parse_Node *list = parse_list(t);
     return list;
     break;
   }
@@ -38,28 +38,28 @@ Parse_Node Parser::parse_next_token() {
     break;
 
   case TOKEN_IDENTIFIER: {
-    Parse_Node sym = {PARSE_NODE_SYMBOL};
-    sym.token = t;
-    sym.nesting_depth = current_depth;
+    Parse_Node *sym = new Parse_Node{PARSE_NODE_SYMBOL};
+    sym->token = t;
+    sym->nesting_depth = current_depth;
     return sym;
     break;
   }
 
   case TOKEN_INTEGER: {
     uint64_t value = std::stoi(t.name);
-    Parse_Node integer = {PARSE_NODE_LITERAL, LITERAL_INTEGER, t};
-    integer.val.u64=value;
-    integer.nesting_depth = current_depth;
+    Parse_Node *integer = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER, t};
+    integer->val.u64=value;
+    integer->nesting_depth = current_depth;
     return integer;
     break;
   }
     
   case TOKEN_FLOAT: {
     double ddouble = std::stod(t.name);
-    Parse_Node ffloat = {PARSE_NODE_LITERAL, LITERAL_FLOAT};
-    ffloat.val.dub = ddouble;
-    ffloat.token = t;
-    ffloat.nesting_depth = current_depth;
+    Parse_Node *ffloat = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_FLOAT};
+    ffloat->val.dub = ddouble;
+    ffloat->token = t;
+    ffloat->nesting_depth = current_depth;
     return ffloat;
     break;
   }
@@ -70,37 +70,58 @@ Parse_Node Parser::parse_next_token() {
   }
 }
 
-Parse_Node Parser::parse_list(Token start) {
-  Parse_Node list = {PARSE_NODE_LIST};
-  list.nesting_depth = current_depth;
-  list.token = start;
+Parse_Node *Parser::parse_list(Token start) {
+  Parse_Node *list = new Parse_Node{PARSE_NODE_LIST};
+  list->nesting_depth = current_depth;
+  list->token = start;
   Token t = lex.peek_next_token();
   current_depth++;
+  Parse_Node *cur = list;
+  Parse_Node *next;
   while (t.type != TOKEN_R_PAREN) {
     if (t.type == TOKEN_END_OF_FILE) {
       std::cerr << "Unmatched '(' at " << lex.filename << ":";
       std::cerr << "\n";
       exit(1);
     }
-    
-    list.list_items.push_back(parse_next_token());
-    t = lex.peek_next_token();
+
+    cur->first = parse_next_token();
+    next = new Parse_Node{PARSE_NODE_LIST};
+    cur->next = next;
+    cur = next;
+    t = lex.peek_next_token();    
   }
   current_depth--;
   lex.next_token(); // eat right parenthesis  
   return list;
 }
 
-std::string Parse_Node::print_parse_node() {
+int Parse_Node::length() {
+  if (type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: called length on object that is not a list\n");
+    return 0;
+  }
 
+  int len = 0;
+  Parse_Node *cur = this;
+  while (cur->first != nullptr) {
+    ++len;
+    cur = cur->next;
+  }
+  return len;  
+}
+
+std::string Parse_Node::print() {
   switch (type) {
   case PARSE_NODE_LIST: {
     std::string list = "(";
-    for(int i = 0; i < list_items.size(); ++i) {
-      list += list_items[i].print_parse_node();
-      if (i < list_items.size()-1) {
+    Parse_Node *cur = this;
+    while (cur->first != nullptr) {
+      list += cur->first->print();
+      if (cur->next->first != nullptr) {
 	list += " ";
-      }
+      }      
+      cur = cur->next;
     }
     list += ")";
     return list;
@@ -138,6 +159,10 @@ std::string Parse_Node::print_parse_node() {
   }
 }
 
+const char * Parse_Node::cprint() {
+  return print().c_str();
+}
+
 
 void Parse_Node::debug_print_parse_node() {
 
@@ -148,7 +173,11 @@ void Parse_Node::debug_print_parse_node() {
     std::cout << ", name: " << token.name << "\n";;
   } else {
     printf("\n");
-    for(auto node : list_items) node.debug_print_parse_node();
+    Parse_Node *cur = this;
+    while (cur->first != nullptr) {
+      cur->debug_print_parse_node();
+      cur = cur->next;
+    }    
   } 
 }
 
