@@ -2,6 +2,7 @@
 
 Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
+Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env);
 
 Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
   switch (node->type) {
@@ -17,7 +18,14 @@ Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
   case PARSE_NODE_SYMBOL: {
     return env->lookup(node->token.name);
     break;
-  }    
+  }
+  case PARSE_NODE_SYNTAX: {
+    return node->first; // this is only quote, obviously will need more handling for more syntax
+    break;
+  }
+  default:
+    fprintf(stderr, "Error: could not evaluate unknown type\n");
+    return nullptr;
   }  
   return nullptr;
 }
@@ -49,6 +57,11 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
     return apply_macro(func, node, env);
     break;
   }
+  case FUNCTION_NATIVE: {
+    return apply_fun(func, node, env);
+    break;
+  }
+    
   default: {
     fprintf(stderr, "Error: function type not recognized\n");
     fprintf(stderr, "node: %s\n", node->cprint());
@@ -58,6 +71,45 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
     break;
   }
   }  
+}
+
+Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env) {
+  Symbol_Table *fun_env = new Symbol_Table(env);
+  
+  // bind given arguments to symbols in macro-args
+  Parse_Node *cur_param = fun->first;
+  Parse_Node *cur_arg = node->next;
+  while (cur_param->first != nullptr) {
+    Parse_Node *param = cur_param->first;
+    Parse_Node *arg = cur_arg->first;
+    switch(param->type) {
+    case PARSE_NODE_SYMBOL: {
+      fun_env->table[param->token.name] = eval_parse_node(arg, env);
+      break;
+    }
+    default: {
+      fprintf(stderr, "Shouldn't reach here\n");
+      fprintf(stderr, "cur_param: %s\n", cur_param->cprint());
+      fprintf(stderr, "arg type: %s\n", arg->print_type());
+      fprintf(stderr, "param type: %s\n", param->print_type());
+      fprintf(stderr, "arg: %s\n", arg->cprint());
+      fprintf(stderr, "param: %s\n", param->cprint());
+      return nullptr;
+      break;
+    }
+    }
+    cur_param = cur_param->next;
+    cur_arg = cur_arg->next;
+  }
+
+  Parse_Node *cur = fun->next;
+  Parse_Node *ret;
+  while (cur->first != nullptr) {
+    ret = eval_parse_node(cur->first, fun_env);
+    cur = cur->next;
+  }
+  
+  return ret;
 }
 
 Parse_Node *apply_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {
@@ -97,6 +149,40 @@ Parse_Node *apply_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) 
   }
   
   return ret;
+}
+
+Parse_Node *builtin_quote(Parse_Node *args, Symbol_Table *env) {
+  Parse_Node *q = new Parse_Node{PARSE_NODE_SYNTAX, SYNTAX_QUOTE};
+  q->first = args;
+  return q;
+}
+
+Parse_Node *builtin_defun(Parse_Node *args, Symbol_Table *env) {
+  int nargs = args->length();
+  if (nargs < 2) {
+    fprintf(stderr, "Error: defun requires a fun-name argument, and an fun-args argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *fun_name = args->first;
+  if (fun_name->type != PARSE_NODE_SYMBOL) {
+    fprintf(stderr, "Error: argument fun-name requires a symbol\n");
+    return nullptr;
+  }
+
+  Parse_Node *fun_args = args->next->first;
+  if (fun_args->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: argument fun-args requires a list\n");
+    return nullptr;
+  }
+
+  Parse_Node *new_fun = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_NATIVE};
+  new_fun->token = fun_name->token;
+  new_fun->first = fun_args;
+  new_fun->next = args->next->next;
+  
+  env->table[fun_name->token.name] = new_fun;
+  return new_fun;
 }
 
 Parse_Node *builtin_defmacro(Parse_Node *args, Symbol_Table *env) {
@@ -975,6 +1061,7 @@ Symbol_Table create_base_environment() {
   env.insert("true", tru);
   env.insert("false", fal);
 
+  create_builtin("defun", builtin_defun, &env);
   create_builtin("defmacro", builtin_defmacro, &env);
   create_builtin("defsym", builtin_defsym, &env);
   create_builtin("let", builtin_let, &env);

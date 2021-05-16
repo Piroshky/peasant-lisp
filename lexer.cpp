@@ -46,7 +46,12 @@ Token Lexer::next_token() {
   } else if (c == ')') {
     pos++;
     character++;
-    t = Token{TOKEN_R_PAREN, line, character-1, line, character-1};    
+    t = Token{TOKEN_R_PAREN, line, character-1, line, character-1};
+
+  } else if (c == '\'') {    
+    pos++;
+    character++;
+    t = Token{TOKEN_QUOTE, line, character-1, line, character-1};
     
   } else if (isdigit(c)) {
     t = read_number();

@@ -12,7 +12,8 @@ enum Parse_Node_Type {
   PARSE_NODE_LIST,
   PARSE_NODE_SYMBOL,
   PARSE_NODE_LITERAL,
-  PARSE_NODE_FUNCTION
+  PARSE_NODE_FUNCTION,
+  PARSE_NODE_SYNTAX
 };
 
 std::string print_parse_node_type(Parse_Node_Type);
@@ -29,7 +30,9 @@ enum Parse_Node_Subtype {
 
   FUNCTION_MACRO,
   FUNCTION_BUILTIN,
-  FUNCTION_USER
+  FUNCTION_NATIVE,
+
+  SYNTAX_QUOTE
 };
 
 struct Parse_Node {

@@ -9,8 +9,6 @@ const char *parse_node_types[] = {
   "PARES_NODE_FUNCTION"
 };
 
-
-
 void Parser::parse_top_level_expressions() {
   Token t = lex.peek_next_token();
   while (t.type != TOKEN_END_OF_FILE) {
@@ -61,6 +59,14 @@ Parse_Node *Parser::parse_next_token() {
     ffloat->token = t;
     ffloat->nesting_depth = current_depth;
     return ffloat;
+    break;
+  }
+
+  case TOKEN_QUOTE: {
+    Parse_Node *q = new Parse_Node{PARSE_NODE_SYNTAX, SYNTAX_QUOTE};
+    Parse_Node *a = parse_next_token();
+    q->first = a;
+    return q;
     break;
   }
 
@@ -157,6 +163,11 @@ std::string Parse_Node::print() {
     return token.name;
     break;
   }
+  case PARSE_NODE_SYNTAX: {
+    return "'" + first->print();
+    break;
+  }
+    
   default:
     fprintf(stderr, "Tried to print unknown symbol type\n");
     exit(1);
@@ -166,7 +177,6 @@ std::string Parse_Node::print() {
 const char * Parse_Node::cprint() {
   return print().c_str();
 }
-
 
 void Parse_Node::debug_print_parse_node() {
 
