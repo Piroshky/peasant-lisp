@@ -160,7 +160,7 @@ std::string Parse_Node::print() {
     }
   }
   case PARSE_NODE_FUNCTION: {
-    return token.name;
+    return "#'" + token.name;
     break;
   }
   case PARSE_NODE_SYNTAX: {

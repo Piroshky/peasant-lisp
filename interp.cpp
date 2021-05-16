@@ -1,9 +1,10 @@
+#include <iostream>
 #include "interp.h"
 #include "builtin_math.h"
 #include "builtin_logic.h"
 
 Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env);
-Parse_Node *apply_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
+Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env);
 
 Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
@@ -56,7 +57,7 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
     break;
   }
   case FUNCTION_MACRO: {
-    return apply_macro(func, node, env);
+    return expand_eval_macro(func, node, env);
     break;
   }
   case FUNCTION_NATIVE: {
@@ -114,7 +115,7 @@ Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env) {
   return ret;
 }
 
-Parse_Node *apply_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {
+Parse_Node *expand_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {
   Symbol_Table *macro_env = new Symbol_Table(env);
   
   // bind given arguments to symbols in macro-args
@@ -151,6 +152,31 @@ Parse_Node *apply_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) 
   }
   
   return ret;
+}
+
+Parse_Node *expand_eval_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {
+  Parse_Node *expand = expand_macro(macro, node, env);
+  return eval_parse_node(expand, env);
+}
+
+Parse_Node *builtin_expand(Parse_Node *args, Symbol_Table *env) {
+  if (args->first == nullptr) {
+    fprintf(stderr, "Error: expand requires at least one argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *macro_sym = args->first;
+  if (macro_sym->type != PARSE_NODE_SYMBOL) {
+    fprintf(stderr, "Error: invalid expand call, %s is not a symbol\n", macro_sym->cprint());
+    return nullptr;
+  }
+
+  Parse_Node *macro = env->lookup(macro_sym->token.name);
+  if (macro == nullptr || macro->subtype != FUNCTION_MACRO) {
+    fprintf(stderr, "Error: could not find macro named %s\n", macro_sym->cprint());
+    return nullptr;
+  }
+  return expand_macro(macro, args, env);
 }
 
 Parse_Node *builtin_quote(Parse_Node *args, Symbol_Table *env) {
@@ -484,6 +510,65 @@ Parse_Node *builtin_if(Parse_Node *args, Symbol_Table *env) {
   return ret;
 }
 
+Parse_Node *builtin_print(Parse_Node *args, Symbol_Table *env) {
+  Parse_Node *ret = nullptr;
+  while (args->first != nullptr) {
+    Parse_Node *earg = eval_parse_node(args->first, env);
+    std::cout << earg->print() << std::endl;
+    ret = earg;
+    args = args->next;
+  }
+  if (ret == nullptr) {
+    fprintf(stderr, "Error: print takes at least one argument\n");    
+  }
+  return ret;
+}
+
+Parse_Node *builtin_for_each(Parse_Node *args, Symbol_Table *env) {
+  int nargs = args->length();
+  if (nargs < 1) {
+    fprintf(stderr, "Error: print takes at least one argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *binding = args->first;
+  if (binding->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: for-each binding must be a list\n");
+    return nullptr;
+  }
+
+  if (binding->length() != 2) {
+    fprintf(stderr, "Error: for-each binding must be exactly two argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *sym = binding->first;
+  if (sym->type != PARSE_NODE_SYMBOL) {
+    fprintf(stderr, "Error: for-each binding first argument is not a symbol\n");
+    return nullptr;    
+  }
+
+  Parse_Node *list = eval_parse_node(binding->next->first, env);
+  if (list->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: for-each binding second argument is not a list\n");
+    return nullptr;    
+  }
+  
+  Symbol_Table *for_each_env = new Symbol_Table(env);
+  Parse_Node *cur = list;
+  Parse_Node *ret = args->first; // this way if there is no body the empty list is returned
+  while (cur->first != nullptr) {
+    for_each_env->table[sym->token.name] = cur->first;
+    Parse_Node *body = args->next;
+    while (body->first != nullptr) {
+      ret = eval_parse_node(body->first, for_each_env);
+      body = body->next;
+    }
+    cur = cur->next;
+  }
+  return ret;
+}
+
 void create_builtin(std::string symbol, Parse_Node *(*func)(Parse_Node *, Symbol_Table *), Symbol_Table *env) {
   Parse_Node *f = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_BUILTIN};
   f->val.func = func;
@@ -503,11 +588,15 @@ Symbol_Table create_base_environment() {
 
   create_builtin("defun", builtin_defun, &env);
   create_builtin("defmacro", builtin_defmacro, &env);
+  create_builtin("expand", builtin_expand, &env);
   create_builtin("defsym", builtin_defsym, &env);
+  create_builtin("set", builtin_defsym, &env);
   create_builtin("let", builtin_let, &env);
   create_builtin("progn", builtin_progn, &env);
   create_builtin("if", builtin_if, &env);
   create_builtin("eval", builtin_eval, &env);
+  create_builtin("print", builtin_print, &env);
+  create_builtin("for-each", builtin_for_each, &env);
 
   create_builtin("list", builtin_list, &env);
   create_builtin("first", builtin_first, &env);
