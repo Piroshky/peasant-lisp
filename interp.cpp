@@ -51,6 +51,9 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
   }
   default: {
     fprintf(stderr, "Error: function type not recognized\n");
+    fprintf(stderr, "node: %s\n", node->cprint());
+    fprintf(stderr, "func_sym: %s\n", func_sym->cprint());
+    fprintf(stderr, "func: %s\n", func->cprint());
     return nullptr;
     break;
   }
@@ -143,9 +146,20 @@ Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
   // if (it == env.table.end()) {
   //   //
   // }
-  env->table[sym->token.name] = args->next->first;
+
+  Parse_Node *val = eval_parse_node(args->next->first, env);
+  env->table[sym->token.name] = val;
   
   return sym;
+}
+
+Parse_Node *builtin_eval(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 1) {
+    fprintf(stderr, "Error: eval takes exactly one argument\n");
+    return nullptr;
+  }
+  Parse_Node *arg = eval_parse_node(args->first, env);
+  return eval_parse_node(arg, env);
 }
 
 Parse_Node *builtin_progn(Parse_Node *args, Symbol_Table *env) {
@@ -160,6 +174,129 @@ Parse_Node *builtin_progn(Parse_Node *args, Symbol_Table *env) {
   }
 
   return ret;
+}
+
+Parse_Node *builtin_list(Parse_Node *args, Symbol_Table *env) {
+  Parse_Node *list = new Parse_Node{PARSE_NODE_LIST};
+  Parse_Node *cur = list;
+  Parse_Node *arg = args;
+  while (arg->first != nullptr) {
+    cur->first = eval_parse_node(arg->first, env);
+    cur->next = new Parse_Node{PARSE_NODE_LIST};
+    cur = cur->next;
+    arg = arg->next;
+  }
+  return list;
+}
+
+Parse_Node *builtin_first(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 1) {
+    fprintf(stderr, "Error: first takes exactly one argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+  if (earg->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: argument %s not a list\n", earg->cprint());
+  }
+
+  if (earg->first == nullptr) {
+    return earg;
+  }  
+
+  return earg->first;
+}
+
+Parse_Node *builtin_last(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 1) {
+    fprintf(stderr, "Error: last takes exactly one argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+  if (earg->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: argument %s not a list\n", earg->cprint());
+  }
+
+  if (earg->first == nullptr) {
+    return earg;
+  }
+
+  Parse_Node *prev = earg->first;
+  Parse_Node *cur = earg->next;
+  while (cur->first != nullptr) {
+    prev = cur->first;
+    cur = cur->next;
+  }
+
+  return prev;
+}
+
+Parse_Node *builtin_pop(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 1) {
+    fprintf(stderr, "Error: pop takes exactly one argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg = eval_parse_node(args->first, env);
+  if (earg->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: argument %s not a list\n", earg->cprint());
+  }
+
+  if (earg->first == nullptr) {
+    return earg;
+  }  
+
+  return earg->next;
+}
+
+Parse_Node *builtin_push(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 2) {
+    fprintf(stderr, "Error: pop takes exactly two argument\n");
+    return nullptr;
+  }
+  
+  Parse_Node *earg2 = eval_parse_node(args->next->first, env);
+  if (earg2->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: argument %s not a list\n", earg2->cprint());
+  }
+
+  Parse_Node *earg1 = eval_parse_node(args->first, env);
+  Parse_Node *ret = new Parse_Node{PARSE_NODE_LIST};
+  ret->first = earg1;
+  ret->next = earg2;
+
+  return ret;
+}
+
+Parse_Node *builtin_nth(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 2) {
+    fprintf(stderr, "Error: nth takes exactly two argument\n");
+    return nullptr;
+  }
+
+  Parse_Node *earg1 = eval_parse_node(args->first, env);
+  if (earg1->subtype != LITERAL_INTEGER) {
+    fprintf(stderr, "Error: argument %s not an integer\n", earg1->cprint());
+  }
+  
+  Parse_Node *earg2 = eval_parse_node(args->next->first, env);
+  if (earg2->type != PARSE_NODE_LIST) {
+    fprintf(stderr, "Error: argument %s not a list\n", earg2->cprint());
+  }
+
+  int nth = earg1->val.u64;
+  Parse_Node *cur = earg2;
+  for (int i = 1; i < nth; ++i) {
+    if (cur->first == nullptr) {
+      return cur;
+    }
+    cur = cur->next;    
+  }
+  if (cur->first == nullptr) {
+    return cur;
+  }
+  return cur->first;
 }
 
 Parse_Node *builtin_let(Parse_Node *args, Symbol_Table *env) {
@@ -843,6 +980,14 @@ Symbol_Table create_base_environment() {
   create_builtin("let", builtin_let, &env);
   create_builtin("progn", builtin_progn, &env);
   create_builtin("if", builtin_if, &env);
+  create_builtin("eval", builtin_eval, &env);
+
+  create_builtin("list", builtin_list, &env);
+  create_builtin("first", builtin_first, &env);
+  create_builtin("last", builtin_last, &env);
+  create_builtin("pop", builtin_pop, &env);
+  create_builtin("push", builtin_push, &env);
+  create_builtin("nth", builtin_nth, &env);
 
   create_builtin("+", builtin_add, &env);
   create_builtin("*", builtin_multiply, &env);
