@@ -25,50 +25,85 @@ myvar
 
 ### Basic
 defun
+\
 defmacro
+\
 expand
+\
 eval
+\
 defsym
+\
 set
+\
 let
+\
 progn
+\
 if
+\
 when
+\
 unless
+\
 cond
+\
 for-each
+\
 load
+\
 print
 
-### List Manipulation
+### List Access and Manipulation
 list
+\
 first
+\
 last
+\
 nth
+\
 pop
+\
 push
+\
 append
+\
 length
+\
 ~
 
 ### Math
-+
-*
+\+
+\
+\*
 
 ### Logic
 =
+\
 <
+\
 <=
+\
 >
+\
 >=
+\
 and
+\
 or
+\
 not
 
 ### Bitwise
 &
+\
 |
+\
 ^
+\
 ~
+\
 <<
+\
 >>
