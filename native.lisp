@@ -2,6 +2,10 @@
   (let ((body `(progn ,@forms)))
     `(if ,test ,body)))
 
+(defmacro unless (test &rest forms)
+  (let ((body `(progn ,@forms)))
+    `(if (not ,test) ,body)))
+
 (defmacro cond (&rest clauses)
   (let ((body) (prev))
     (for-each
