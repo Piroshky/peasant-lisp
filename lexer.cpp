@@ -38,6 +38,14 @@ Token Lexer::next_token() {
   
   char c = source[pos];
 
+  if (c == ';') {
+    current_token--;
+    while (pos < source.size() && source[pos] != '\n') {
+      ++pos;
+    }
+    return next_token();
+  }
+
   if (c == '(') {
     pos++;
     character++;

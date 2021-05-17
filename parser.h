@@ -87,4 +87,5 @@ struct Symbol_Table {
   
   void insert(std::string symbol, Parse_Node *node);
   Parse_Node *lookup(std::string symbol);
+  Parse_Node *set(std::string symbol, Parse_Node *node);
 };

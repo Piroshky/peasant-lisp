@@ -17,3 +17,18 @@ Parse_Node *Symbol_Table::lookup(std::string symbol) {
     return nullptr;    
   }
 }
+
+Parse_Node *Symbol_Table::set(std::string symbol, Parse_Node *node) {
+  std::map<std::string, Parse_Node *>::iterator it;
+
+  it = table.find(symbol);
+  if (it != table.end()) {
+    table[symbol] = node;
+    return node;
+  } else if (parent_table != nullptr) {
+    return parent_table->set(symbol, node);
+  } else {
+    fprintf(stderr, "Error: unbound symbol: `%s`\n", symbol.c_str());
+    return nullptr;    
+  }
+}

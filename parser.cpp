@@ -64,10 +64,20 @@ Parse_Node *Parser::parse_next_token() {
 
   case TOKEN_QUOTE: {
     Parse_Node *q = new Parse_Node{PARSE_NODE_SYNTAX, SYNTAX_QUOTE};
+    Token t = lex.peek_next_token();
+    if (t.type == TOKEN_END_OF_FILE) {
+      fprintf(stderr, "Error: expected object after quote, reached end of file instead\n");      
+      exit(1);
+    }
     Parse_Node *a = parse_next_token();
     q->first = a;
     return q;
     break;
+  }
+
+  case TOKEN_END_OF_FILE: {
+    printf("hehhhere\n");
+    return nullptr;
   }
 
   default:

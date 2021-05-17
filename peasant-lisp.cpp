@@ -36,8 +36,7 @@ int main(int argc, char *argv[]) {
     printf("\n");
     Parse_Node *evaled = eval_parse_node(parse.top_level_expressions[i], &env);
     if (evaled != nullptr) {
-      std::cout << evaled->print();
-      printf("\n");
+      std::cout << "\E[31m" << evaled->print() << "\E[39m" << std::endl;
     }
     printf("\n");
   }
