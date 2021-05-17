@@ -108,6 +108,19 @@ Parse_Node *Parser::parse_next_token() {
     return q;
     break;
   }
+
+  case TOKEN_COMMA_AT: {
+    Parse_Node *q = new Parse_Node{PARSE_NODE_SYNTAX, SYNTAX_COMMA_AT};
+    Token t = lex.peek_next_token();
+    if (t.type == TOKEN_END_OF_FILE) {
+      fprintf(stderr, "Error: expected object after ,@ but reached end of file instead\n");      
+      exit(1);
+    }
+    Parse_Node *a = parse_next_token();
+    q->first = a;
+    return q;
+    break;
+  }
     
   case TOKEN_END_OF_FILE: {
     printf("hehhhere\n");
@@ -220,6 +233,10 @@ std::string Parse_Node::print() {
     }
     case SYNTAX_COMMA: {
       return "," + first->print();      
+      break;
+    }
+    case SYNTAX_COMMA_AT: {
+      return ",@" + first->print();      
       break;
     }
     }

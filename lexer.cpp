@@ -73,7 +73,12 @@ Token Lexer::next_token() {
   } else if (c == ',') {    
     pos++;
     character++;
-    t = Token{TOKEN_COMMA, line, character-1, line, character-1};
+    if (pos < source.size() && source[pos] == '@') {
+      pos++;
+      t = Token{TOKEN_COMMA_AT, line, character-1, line, character-1};
+    } else {
+      t = Token{TOKEN_COMMA, line, character-1, line, character-1};
+    }    
     
   } else if (isdigit(c)) {
     t = read_number();

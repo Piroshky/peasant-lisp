@@ -5,6 +5,8 @@
 
 Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env);
 Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env);
+Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env);
+Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env);
 
@@ -19,10 +21,8 @@ bool is_list(Parse_Node *node) {
   return (node->type == PARSE_NODE_LIST);
 }
 
+//assumes that node is a list
 bool is_empty_list(Parse_Node *node) {
-  if (!is_list(node)) {
-    return false;
-  }
   return (node->first == nullptr);
 }
 
@@ -60,6 +60,11 @@ Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
       return nullptr;
       break;
     }
+    case SYNTAX_COMMA_AT: {
+      fprintf(stderr, "Error: ,@ found not inside backtick or unquoted list\n");
+      return nullptr;
+      break;
+    }
     }
 
     break;
@@ -76,6 +81,8 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
   if (node->first == nullptr) {
     return node;
   }
+
+  node = expand_splice(node, env);
 
   Parse_Node *func_sym = node->first;
   if (func_sym->type != PARSE_NODE_SYMBOL) {
@@ -114,6 +121,38 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
   }
   }  
 }
+
+Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env) {
+  Parse_Node *ret = node;
+  Parse_Node *prev = nullptr;
+  
+  while (node->first != nullptr) {
+    if (node->first->subtype == SYNTAX_COMMA_AT) {
+      Parse_Node *elist = eval_parse_node(node->first->first, env);
+      if (!is_list(elist)) {
+	fprintf(stderr, "Error: ,@ can only be used with list, %s is not a list\n",
+		node->first->first->cprint());
+	return nullptr;
+      }      
+      if (prev == nullptr) {
+	ret = elist;
+      } else {
+	prev->next = elist;
+      }
+      Parse_Node *cur = elist;
+      while (!is_empty_list(cur->next)) {
+	cur = cur->next;
+      }
+      cur->next = node->next;
+      prev = cur;
+    } else {
+      prev = node;
+    }
+    node = node->next;
+  }
+  return ret;
+}
+
 
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env) {
   Symbol_Table *fun_env = new Symbol_Table(env);
@@ -154,28 +193,26 @@ Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env) {
   return ret;
 }
 
-Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env) {
+Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env) {  
   if (node->subtype == SYNTAX_COMMA) {
     return eval_parse_node(node->first, env);
   }
   
   if (is_list(node)) {
-    Parse_Node *list = new Parse_Node{PARSE_NODE_LIST};
-    Parse_Node *cur = list;
-    while(node->first != nullptr) {
-      if (node->first->subtype == SYNTAX_COMMA) {
-	cur->first = eval_parse_node(node->first->first, env);
-      } else {
-	cur->first = node->first;
-      }
-      cur->next = new Parse_Node{PARSE_NODE_LIST};
-      cur = cur->next;
-      node = node->next;
-    }
-    return list; 
-  } else {
-    return node;
+    node = eval_backtick_list(node, env);
   }
+  return node;
+}
+
+Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env) {
+  Parse_Node *ret = node;
+  node = expand_splice(node, env);
+  while (node->first != nullptr) {
+    node->first = eval_backtick(node->first, env);
+    node = node->next;
+  }
+  
+  return ret;
 }
 
 Parse_Node *expand_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {

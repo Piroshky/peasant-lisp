@@ -34,7 +34,8 @@ enum Parse_Node_Subtype {
 
   SYNTAX_QUOTE,
   SYNTAX_BACKTICK,
-  SYNTAX_COMMA
+  SYNTAX_COMMA,
+  SYNTAX_COMMA_AT,
 };
 
 struct Parse_Node {

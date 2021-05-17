@@ -1,9 +1,6 @@
-;; this needs to be re-written when list splicing is added.
-(defmacro when (test &rest body)
-  (let ((act (list 'progn)))
-    (for-each (form body)
-	      (append form act))
-    (list 'if test act)))
+(defmacro when (test &rest forms)
+  (let ((body `(progn ,@forms)))
+    `(if ,test ,body)))
 
 (defmacro cond (&rest clauses)
   (let ((body) (prev))
