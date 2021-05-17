@@ -7,6 +7,28 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env);
 
+bool is_string(Parse_Node *node) {
+  if (node->type != PARSE_NODE_LITERAL) {
+    return false;
+  }
+  return (node->subtype == LITERAL_STRING);
+}
+
+bool is_list(Parse_Node *node) {
+  return (node->type == PARSE_NODE_LIST);
+}
+
+bool is_empty_list(Parse_Node *node) {
+  if (!is_list(node)) {
+    return false;
+  }
+  return (node->first == nullptr);
+}
+
+bool is_sequence(Parse_Node *node) {
+  return is_list(node) || is_string(node);
+}
+
 Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
   switch (node->type) {
   case PARSE_NODE_LITERAL: {
@@ -380,23 +402,37 @@ Parse_Node *builtin_nth(Parse_Node *args, Symbol_Table *env) {
     return nullptr;
   }
 
-  Parse_Node *earg1 = eval_parse_node(args->first, env);
-  if (earg1->subtype != LITERAL_INTEGER) {
-    fprintf(stderr, "Error: argument %s not an integer\n", earg1->cprint());
+  Parse_Node *n = eval_parse_node(args->first, env);
+  if (n->subtype != LITERAL_INTEGER) {
+    fprintf(stderr, "Error: argument %s not an integer\n", n->cprint());
   }
   
-  Parse_Node *earg2 = eval_parse_node(args->next->first, env);
-  if (earg2->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: argument %s not a list\n", earg2->cprint());
+  Parse_Node *seq = eval_parse_node(args->next->first, env);
+  if (!is_sequence(seq)) {
+    fprintf(stderr, "Error: argument %s not a sequence\n", seq->cprint());
   }
 
-  int nth = earg1->val.u64;
-  Parse_Node *cur = earg2;
+  int nth = n->val.u64;
+
+  if (seq->subtype == LITERAL_STRING) {
+    --nth;
+    Parse_Node *ret = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_STRING};
+    int len = seq->token.name.length();
+    if (nth >= len) {
+      ret->token.name = seq->token.name[len-1];
+    } else {
+      ret->token.name = seq->token.name[nth];
+    }
+    
+    return ret;
+  }
+  
+  Parse_Node *cur = seq;
   for (int i = 1; i < nth; ++i) {
     if (cur->first == nullptr) {
       return cur;
     }
-    cur = cur->next;    
+    cur = cur->next;
   }
   if (cur->first == nullptr) {
     return cur;
@@ -462,6 +498,23 @@ Parse_Node *builtin_append(Parse_Node *args, Symbol_Table *env) {
   end->first = earg1;
   end->next = new Parse_Node{PARSE_NODE_LIST};
   return list;
+}
+
+// concatenate the string representation of the arguments
+Parse_Node *builtin_string_concatenate(Parse_Node *args, Symbol_Table *env) {
+  std::string con = "";
+  while (!is_empty_list(args)) {
+    Parse_Node *earg = eval_parse_node(args->first, env);
+    if (is_string(earg)) {
+      con += earg->token.name;
+    } else {
+      con += earg->print();
+    }
+    args = args->next;
+  }
+  Parse_Node *ret = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_STRING};
+  ret->token.name = con;
+  return ret;
 }
 
 Parse_Node *builtin_length(Parse_Node *args, Symbol_Table *env) {
@@ -697,6 +750,7 @@ Symbol_Table create_base_environment() {
   create_builtin("push", builtin_push, &env);
   create_builtin("append", builtin_append, &env);
   create_builtin("length", builtin_length, &env);
+  create_builtin("~", builtin_string_concatenate, &env);
 
   create_builtin("+", builtin_add, &env);
   create_builtin("*", builtin_multiply, &env);
