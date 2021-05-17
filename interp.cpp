@@ -637,6 +637,28 @@ Parse_Node *builtin_for_each(Parse_Node *args, Symbol_Table *env) {
   return ret;
 }
 
+void load_file(std::string file_name, Symbol_Table *env) {
+  Parser parse = Parser(file_name.c_str());
+  parse.parse_top_level_expressions();
+
+  for (int i = 0; i < parse.top_level_expressions.size(); i++) {
+    Parse_Node *evaled = eval_parse_node(parse.top_level_expressions[i], env);
+  }
+}
+
+Parse_Node *builtin_load(Parse_Node *args, Symbol_Table *env) {
+  while (args->first != nullptr) {
+    Parse_Node *earg = eval_parse_node(args->first, env);
+    if (args->first->subtype != LITERAL_STRING) {
+      fprintf(stderr, "Error: %s is not a string\n", earg->cprint());
+      return nullptr;
+    }
+    load_file(earg->token.name, env);
+    args = args->next;
+  }
+  return tru;
+}
+
 void create_builtin(std::string symbol, Parse_Node *(*func)(Parse_Node *, Symbol_Table *), Symbol_Table *env) {
   Parse_Node *f = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_BUILTIN};
   f->val.func = func;
@@ -665,6 +687,7 @@ Symbol_Table create_base_environment() {
   create_builtin("eval", builtin_eval, &env);
   create_builtin("print", builtin_print, &env);
   create_builtin("for-each", builtin_for_each, &env);
+  create_builtin("load", builtin_load, &env);
 
   create_builtin("list", builtin_list, &env);
   create_builtin("first", builtin_first, &env);
@@ -694,6 +717,8 @@ Symbol_Table create_base_environment() {
   create_builtin("~", builtin_bitnot, &env);
   create_builtin("<<", builtin_bitshift_left, &env);
   create_builtin(">>", builtin_bitshift_right, &env);
+
+  load_file("native.lisp", &env);
 
   return env;
 }

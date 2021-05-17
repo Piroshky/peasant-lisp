@@ -12,6 +12,7 @@ enum Token_Type {
   TOKEN_INTEGER,
   TOKEN_FLOAT,
   TOKEN_QUOTE,
+  TOKEN_STRING,
   TOKEN_END_OF_FILE
 };
 
@@ -53,4 +54,5 @@ struct Lexer {
   Token peek_next_token();
   Token read_identifier();
   Token read_number();
+  Token read_string();
 };

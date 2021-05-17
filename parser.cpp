@@ -42,6 +42,14 @@ Parse_Node *Parser::parse_next_token() {
     return sym;
     break;
   }
+    
+  case TOKEN_STRING: {
+    Parse_Node *str = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_STRING};
+    str->token = t;
+    str->nesting_depth = current_depth;
+    return str;
+    break;
+  }
 
   case TOKEN_INTEGER: {
     uint64_t value = std::stoi(t.name);
@@ -96,8 +104,8 @@ Parse_Node *Parser::parse_list(Token start) {
   Parse_Node *next;
   while (t.type != TOKEN_R_PAREN) {
     if (t.type == TOKEN_END_OF_FILE) {
-      std::cerr << "Unmatched '(' at " << lex.filename << ":";
-      std::cerr << "\n";
+      std::cerr << "Unmatched '(' at " << lex.filename << ":" << t.start_line << ":" << t.start_char << std::endl;
+      // std::cerr << "\n";
       exit(1);
     }
 
@@ -143,12 +151,12 @@ std::string Parse_Node::print() {
     return list;
     break;
   }
-    
+
   case PARSE_NODE_SYMBOL: {
     return token.name;
     break;
   }
-
+    
   case PARSE_NODE_LITERAL: {
     switch (subtype) {
     case LITERAL_INTEGER: {
@@ -159,12 +167,13 @@ std::string Parse_Node::print() {
       return std::to_string(val.dub);
       break;
     }
-    case LITERAL_STRING: {
-      return "PRINT STRING LITERAL NOT IMPLEMENTED";
-      break;
-    }
+      
     case LITERAL_BOOLEAN: {
       return (val.b ? "true" : "false");
+      break;
+    }
+    case LITERAL_STRING: {
+      return '"' + token.name + '"';
       break;
     }
     }

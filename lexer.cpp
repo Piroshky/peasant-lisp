@@ -44,9 +44,13 @@ Token Lexer::next_token() {
       ++pos;
     }
     return next_token();
-  }
-
-  if (c == '(') {
+    
+  } else if (c == '"') {
+    ++pos;
+    ++character;
+    t = read_string();
+    
+  } else if (c == '(') {
     pos++;
     character++;
     t = Token{TOKEN_L_PAREN, line, character-1, line, character-1};
@@ -116,6 +120,35 @@ Token Lexer::read_identifier() {
     pos++;
     character++;
     c = source[pos];
+  }
+
+  t.stop_line = line;
+  t.stop_char = character;
+  return t;
+}
+
+Token Lexer::read_string() {
+  Token t;
+  t.type = TOKEN_STRING;
+  t.start_line = line;
+  t.start_char = character;
+
+  char c = source[pos];
+  
+  while (c != '"') {
+    t.name.push_back(c);
+    if (c == '\n') {
+      ++line;
+      character = 1;
+    } else {
+      ++character;
+    }
+    pos++;
+    c = source[pos];
+  }
+  if (c == '"') {
+    ++character;
+    ++pos;
   }
 
   t.stop_line = line;
