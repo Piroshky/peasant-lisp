@@ -4,6 +4,7 @@
 #include "builtin_logic.h"
 
 Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env);
+Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env);
 
@@ -45,7 +46,22 @@ Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
     break;
   }
   case PARSE_NODE_SYNTAX: {
-    return node->first; // this is only quote, obviously will need more handling for more syntax
+    switch (node->subtype) {
+    case SYNTAX_QUOTE: {
+      return node->first;      
+      break;
+    }
+    case SYNTAX_BACKTICK: {
+      return eval_backtick(node->first, env);
+      break;
+    }
+    case SYNTAX_COMMA: {
+      fprintf(stderr, "Error: comma found not inside backtick\n");
+      return nullptr;
+      break;
+    }
+    }
+
     break;
   }
   default:
@@ -136,6 +152,30 @@ Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env) {
   }
   
   return ret;
+}
+
+Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env) {
+  if (node->subtype == SYNTAX_COMMA) {
+    return eval_parse_node(node->first, env);
+  }
+  
+  if (is_list(node)) {
+    Parse_Node *list = new Parse_Node{PARSE_NODE_LIST};
+    Parse_Node *cur = list;
+    while(node->first != nullptr) {
+      if (node->first->subtype == SYNTAX_COMMA) {
+	cur->first = eval_parse_node(node->first->first, env);
+      } else {
+	cur->first = node->first;
+      }
+      cur->next = new Parse_Node{PARSE_NODE_LIST};
+      cur = cur->next;
+      node = node->next;
+    }
+    return list; 
+  } else {
+    return node;
+  }
 }
 
 Parse_Node *expand_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {
@@ -715,6 +755,7 @@ Parse_Node *builtin_load(Parse_Node *args, Symbol_Table *env) {
 void create_builtin(std::string symbol, Parse_Node *(*func)(Parse_Node *, Symbol_Table *), Symbol_Table *env) {
   Parse_Node *f = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_BUILTIN};
   f->val.func = func;
+  f->token.name = symbol;
   env->insert(symbol, f);
 }
 

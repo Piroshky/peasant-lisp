@@ -32,7 +32,9 @@ enum Parse_Node_Subtype {
   FUNCTION_BUILTIN,
   FUNCTION_NATIVE,
 
-  SYNTAX_QUOTE
+  SYNTAX_QUOTE,
+  SYNTAX_BACKTICK,
+  SYNTAX_COMMA
 };
 
 struct Parse_Node {

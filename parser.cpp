@@ -83,6 +83,32 @@ Parse_Node *Parser::parse_next_token() {
     break;
   }
 
+  case TOKEN_BACKTICK: {
+    Parse_Node *q = new Parse_Node{PARSE_NODE_SYNTAX, SYNTAX_BACKTICK};
+    Token t = lex.peek_next_token();
+    if (t.type == TOKEN_END_OF_FILE) {
+      fprintf(stderr, "Error: expected object after backtick, reached end of file instead\n");      
+      exit(1);
+    }
+    Parse_Node *a = parse_next_token();
+    q->first = a;
+    return q;
+    break;
+  }
+    
+  case TOKEN_COMMA: {
+    Parse_Node *q = new Parse_Node{PARSE_NODE_SYNTAX, SYNTAX_COMMA};
+    Token t = lex.peek_next_token();
+    if (t.type == TOKEN_END_OF_FILE) {
+      fprintf(stderr, "Error: expected object after comma, reached end of file instead\n");      
+      exit(1);
+    }
+    Parse_Node *a = parse_next_token();
+    q->first = a;
+    return q;
+    break;
+  }
+    
   case TOKEN_END_OF_FILE: {
     printf("hehhhere\n");
     return nullptr;
@@ -183,8 +209,21 @@ std::string Parse_Node::print() {
     break;
   }
   case PARSE_NODE_SYNTAX: {
-    return "'" + first->print();
-    break;
+    switch (subtype) {
+    case SYNTAX_QUOTE: {
+      return "'" + first->print();      
+      break;
+    }
+    case SYNTAX_BACKTICK: {
+      return "`" + first->print();      
+      break;
+    }
+    case SYNTAX_COMMA: {
+      return "," + first->print();      
+      break;
+    }
+    }
+    
   }
     
   default:
