@@ -21,7 +21,5 @@
   `(let ,(list (first args))
      (while ,(nth 2 args)
 	    ,@body
-	    ,(nth 3 args)
-	    )
-     ,(last args))
-  )
+	    ,(nth 3 args))
+     ,(last args)))

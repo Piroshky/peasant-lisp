@@ -911,6 +911,142 @@ Parse_Node *builtin_set(Parse_Node *args, Symbol_Table *env) {
   return val;
 }
 
+Parse_Node *single_type_of(Parse_Node *arg, Symbol_Table *env) {
+  Parse_Node *node = eval_parse_node(arg, env);
+  Parse_Node *ret = new Parse_Node{PARSE_NODE_SYMBOL};
+  std::string name;
+  switch (node->type) {
+  case PARSE_NODE_LITERAL: {
+    switch (node->subtype) {
+    case LITERAL_INTEGER: {
+      name = "integer";  
+      break;
+    }
+    case LITERAL_FLOAT: {
+      name = "float";
+      break;
+    }
+    case LITERAL_STRING: {
+      name = "string";
+      break;
+    }
+    case LITERAL_BOOLEAN: {
+      name = "boolean";
+      break;
+    }
+    default:
+      fprintf(stderr, "Error: subtype not found\n");
+      return nullptr;
+    }
+    break;
+  }
+
+  case PARSE_NODE_LIST: {    
+    name = "list";
+    break;
+  }
+    
+  case PARSE_NODE_SYMBOL: {
+    name = "symbol";
+    break;
+  }
+
+  default:
+    fprintf(stderr, "Error: unknown type\n");
+    return nullptr;
+  }
+  ret->token.name = name;
+  return ret;
+}
+
+Parse_Node *builtin_type_of(Parse_Node *args, Symbol_Table *env) {
+  if (is_empty_list(args->next)) {
+    return single_type_of(args->first, env);
+  }
+  Parse_Node *list = new Parse_Node{PARSE_NODE_LIST};
+  Parse_Node *cur = list;
+  while (!is_empty_list(args)) {
+    cur->first = single_type_of(args->first, env);
+    cur->next = new Parse_Node{PARSE_NODE_LIST};
+    cur = cur->next;
+    args = args->next;
+  }
+  return list;
+}
+
+Parse_Node *builtin_type_equal(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() == 1) {
+    fprintf(stderr, "Error: type= take 2+ arguments\n");
+    return nullptr;
+  }
+  Parse_Node *prev = eval_parse_node(args->first, env);
+  args = args->next;
+  while (!is_empty_list(args)) {
+    Parse_Node *cur = eval_parse_node(args->first, env);
+    if (cur->type != prev->type || cur->subtype != prev->subtype) {
+      return fal;
+    }
+    prev = cur;
+    args = args->next;
+  }
+  return tru;
+}
+
+Parse_Node *builtin_symbol_equal(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() == 1) {
+    fprintf(stderr, "Error: symbol= take 2+ arguments\n");
+    return nullptr;
+  }
+  Parse_Node *first = eval_parse_node(args->first, env);
+  if(!is_sym(first)) {
+    fprintf(stderr, "Error: %s does not evaluate to a symbol\n", args->first->cprint());
+    return nullptr;
+  }
+  
+  args = args->next;
+  while (!is_empty_list(args)) {
+    Parse_Node *cur = eval_parse_node(args->first, env);
+    if(!is_sym(cur)) {
+      fprintf(stderr, "Error: %s does not evaluate to a symbol\n", args->first->cprint());
+      return nullptr;
+    }
+    
+    if (cur->token.name != first->token.name) {
+      return fal;
+    }
+    args = args->next;
+  }
+  return tru;
+}
+
+Parse_Node *builtin_symbol_equal(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() == 1) {
+    fprintf(stderr, "Error: string= take 2+ arguments\n");
+    return nullptr;
+  }
+  Parse_Node *first = eval_parse_node(args->first, env);
+  if(!is_string(first)) {
+    fprintf(stderr, "Error: %s does not evaluate to a string\n", args->first->cprint());
+    return nullptr;
+  }
+  
+  args = args->next;
+  while (!is_empty_list(args)) {
+    Parse_Node *cur = eval_parse_node(args->first, env);
+    if(!is_string(cur)) {
+      fprintf(stderr, "Error: %s does not evaluate to a string\n", args->first->cprint());
+      return nullptr;
+    }
+    
+    if (cur->token.name != first->token.name) {
+      return fal;
+    }
+    args = args->next;
+  }
+  return tru;
+}
+
+
 void load_file(std::string file_name, Symbol_Table *env) {
   Parser parse = Parser(file_name.c_str());
   parse.parse_top_level_expressions();
@@ -964,6 +1100,10 @@ Symbol_Table create_base_environment() {
   create_builtin("for-each", builtin_for_each, &env);
   create_builtin("load", builtin_load, &env);
   create_builtin("while", builtin_while, &env);
+  create_builtin("type-of", builtin_type_of, &env);
+  create_builtin("type=", builtin_type_equal, &env);
+  create_builtin("symbol=", builtin_symbol_equal, &env);
+  create_builtin("string=", builtin_symbol_equal, &env);
 
   create_builtin("list", builtin_list, &env);
   create_builtin("first", builtin_first, &env);
