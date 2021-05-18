@@ -25,6 +25,10 @@ bool is_sym(Parse_Node *node) {
   return (node->type == PARSE_NODE_SYMBOL);
 }
 
+bool is_keyword(Parse_Node *node) {
+  return (node->subtype == SYMBOL_KEYWORD);
+}
+
 //assumes that node is a list
 bool is_empty_list(Parse_Node *node) {
   return (node->first == nullptr);
@@ -46,6 +50,10 @@ Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
   }
     
   case PARSE_NODE_SYMBOL: {
+    if (is_keyword(node)) {
+      return node;
+    }
+    
     return env->lookup(node->token.name);
     break;
   }
@@ -365,6 +373,11 @@ Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
     fprintf(stderr, "first argument given to defsym was not a symbol\n");
     return nullptr;
   }
+
+  if(is_keyword(sym)) {
+    fprintf(stderr, "keyword symbols cannot be reassigned\n");
+    return nullptr;
+  }
   
   // std::map<std::string, Parse_Node *>::iterator it;
   // it = env.table.find(sym.token.name);
@@ -423,6 +436,11 @@ Parse_Node *set_first(Parse_Node *args, Symbol_Table *env) {
   }
 
   Parse_Node *earg = eval_parse_node(args->first, env);
+  if(is_keyword(earg)) {
+    fprintf(stderr, "keyword symbols cannot be reassigned\n");
+    return nullptr;
+  }
+  
   if (!is_list(earg) && !is_string(earg)) {
     fprintf(stderr, "Error: argument %s not a list\n", earg->cprint());
     return nullptr;
@@ -793,6 +811,35 @@ Parse_Node *builtin_for_each(Parse_Node *args, Symbol_Table *env) {
   return ret;
 }
 
+bool evals_to_true(Parse_Node *node, Symbol_Table *env) {
+  Parse_Node *val = eval_parse_node(node, env);
+  if (!is_bool(val)) {
+    fprintf(stderr, "Error: while condition didn't evaluate to a boolean\n");
+    return false;
+  }
+  return val->val.b;
+}
+
+Parse_Node *builtin_while(Parse_Node *args, Symbol_Table *env) {
+  int nargs = args->length();
+  if (nargs < 2) {
+    fprintf(stderr, "Error: while takes 2+ arguments\n", nargs);
+    return nullptr;
+  }  
+  Parse_Node *condition = args->first;
+  Parse_Node *body = args->next;
+  Parse_Node *ret;
+
+  while(evals_to_true(condition, env)) {
+    Parse_Node *cur = body;
+    while (!is_empty_list(cur)) {
+      ret = eval_parse_node(cur->first, env);
+      cur = cur->next;
+    }
+  }
+  return ret;
+}
+
 Parse_Node *builtin_set(Parse_Node *args, Symbol_Table *env) {
   int nargs = args->length();
   if (nargs != 2) {
@@ -916,6 +963,7 @@ Symbol_Table create_base_environment() {
   create_builtin("print", builtin_print, &env);
   create_builtin("for-each", builtin_for_each, &env);
   create_builtin("load", builtin_load, &env);
+  create_builtin("while", builtin_while, &env);
 
   create_builtin("list", builtin_list, &env);
   create_builtin("first", builtin_first, &env);

@@ -16,3 +16,12 @@
 	     (append cur prev))
        (set prev cur)))
     body))
+
+(defmacro for (args &rest body)
+  `(let ,(list (first args))
+     (while ,(nth 2 args)
+	    ,@body
+	    ,(nth 3 args)
+	    )
+     ,(last args))
+  )

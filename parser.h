@@ -19,6 +19,9 @@ enum Parse_Node_Type {
 std::string print_parse_node_type(Parse_Node_Type);
 
 enum Parse_Node_Subtype {
+  SUBTYPE_NONE,
+  
+  SYMBOL_KEYWORD,
   SYMBOL_FUNCTION,
   SYMBOL_SYMBOL,
   SYMBOL_VARIABLE,
@@ -40,7 +43,7 @@ enum Parse_Node_Subtype {
 
 struct Parse_Node {
   Parse_Node_Type type;
-  Parse_Node_Subtype subtype;
+  Parse_Node_Subtype subtype = SUBTYPE_NONE;
   Token token;
   
   union {

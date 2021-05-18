@@ -37,6 +37,9 @@ Parse_Node *Parser::parse_next_token() {
 
   case TOKEN_IDENTIFIER: {
     Parse_Node *sym = new Parse_Node{PARSE_NODE_SYMBOL};
+    if (t.name[0] == ':') {
+      sym->subtype = SYMBOL_KEYWORD;
+    }
     sym->token = t;
     sym->nesting_depth = current_depth;
     return sym;
