@@ -21,6 +21,10 @@ bool is_list(Parse_Node *node) {
   return (node->type == PARSE_NODE_LIST);
 }
 
+bool is_sym(Parse_Node *node) {
+  return (node->type == PARSE_NODE_SYMBOL);
+}
+
 //assumes that node is a list
 bool is_empty_list(Parse_Node *node) {
   return (node->first == nullptr);
@@ -374,25 +378,7 @@ Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
   return sym;
 }
 
-Parse_Node *builtin_set(Parse_Node *args, Symbol_Table *env) {
-  int nargs = args->length();
-  if (nargs != 2) {
-    fprintf(stderr, "defsym takes exactly two arguments.\nInstead received %d\n", nargs);
-    return nullptr;
-  }
 
-  Parse_Node *sym = args->first;
-  
-  if (sym->type != PARSE_NODE_SYMBOL) {
-    fprintf(stderr, "first argument given to defsym was not a symbol\n");
-    return nullptr;
-  }
-
-  Parse_Node *val = eval_parse_node(args->next->first, env);
-  env->set(sym->token.name, val);
-  
-  return sym;
-}
 
 Parse_Node *builtin_eval(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 1) {
@@ -430,50 +416,79 @@ Parse_Node *builtin_list(Parse_Node *args, Symbol_Table *env) {
   return list;
 }
 
-Parse_Node *builtin_first(Parse_Node *args, Symbol_Table *env) {
+Parse_Node *set_first(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 1) {
     fprintf(stderr, "Error: first takes exactly one argument\n");
     return nullptr;
   }
 
   Parse_Node *earg = eval_parse_node(args->first, env);
-  if (earg->type != PARSE_NODE_LIST) {
+  if (!is_list(earg) && !is_string(earg)) {
     fprintf(stderr, "Error: argument %s not a list\n", earg->cprint());
+    return nullptr;
   }
-
-  if (earg->first == nullptr) {
-    return earg;
-  }  
-
-  return earg->first;
+  return earg;
 }
 
-Parse_Node *builtin_last(Parse_Node *args, Symbol_Table *env) {
+Parse_Node *builtin_first(Parse_Node *args, Symbol_Table *env) {
+  Parse_Node *ret = set_first(args, env);
+  if (ret == nullptr || ret->first == nullptr) {
+    return ret;    
+  }
+  if (is_string(ret)) {
+    Parse_Node *n = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_STRING};
+    n->token.name = ret->token.name[0];
+    return n;
+  }
+  return ret->first;
+}
+
+Parse_Node *set_last(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 1) {
     fprintf(stderr, "Error: last takes exactly one argument\n");
     return nullptr;
   }
 
   Parse_Node *earg = eval_parse_node(args->first, env);
-  if (earg->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: argument %s not a list\n", earg->cprint());
+  if (!is_list(earg) && !is_string(earg)) {
+    fprintf(stderr, "Error: argument %s not a sequence\n", earg->cprint());
   }
 
   if (earg->first == nullptr) {
     return earg;
   }
 
+  if (is_string(earg)) {
+    return earg;
+  }
+
   Parse_Node *prev = earg->first;
   Parse_Node *cur = earg->next;
   while (cur->first != nullptr) {
-    prev = cur->first;
+    prev = cur;
     cur = cur->next;
   }
 
   return prev;
 }
 
-Parse_Node *builtin_nth(Parse_Node *args, Symbol_Table *env) {
+Parse_Node *builtin_last(Parse_Node *args, Symbol_Table *env) {
+  Parse_Node *ret = set_last(args, env);
+  // printf("builting got %s\n", ret->cprint());
+  if (ret == nullptr || ret->first == nullptr) {
+    return ret;  
+  }
+  if (is_string(ret)) {
+    Parse_Node *n = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_STRING};
+    int l = ret->token.name.length() - 1;
+    n->token.name = ret->token.name[l];
+    return n;
+  }
+  
+  return ret->first;
+}
+
+Parse_Node *set_nth(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 2) {
     fprintf(stderr, "Error: nth takes exactly two argument\n");
     return nullptr;
@@ -493,15 +508,12 @@ Parse_Node *builtin_nth(Parse_Node *args, Symbol_Table *env) {
 
   if (seq->subtype == LITERAL_STRING) {
     --nth;
-    Parse_Node *ret = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_STRING};
     int len = seq->token.name.length();
     if (nth >= len) {
-      ret->token.name = seq->token.name[len-1];
-    } else {
-      ret->token.name = seq->token.name[nth];
+      nth = len - 1;
     }
-    
-    return ret;
+    seq->val.u64 = nth;  //I won't tell anyone if you won't
+    return seq;
   }
   
   Parse_Node *cur = seq;
@@ -514,7 +526,21 @@ Parse_Node *builtin_nth(Parse_Node *args, Symbol_Table *env) {
   if (cur->first == nullptr) {
     return cur;
   }
-  return cur->first;
+  return cur;
+}
+
+Parse_Node *builtin_nth(Parse_Node *args, Symbol_Table *env) {
+  Parse_Node *ret = set_nth(args, env);
+  if (ret == nullptr || ret->first == nullptr || ret->subtype == LITERAL_STRING) {
+    return ret;  
+  }
+  if (is_string(ret)) {
+    Parse_Node *n = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_STRING};
+    n->token.name = ret->token.name[ret->val.u64];
+    return n;
+  }
+  
+  return ret->first;  
 }
 
 Parse_Node *builtin_pop(Parse_Node *args, Symbol_Table *env) {
@@ -765,6 +791,77 @@ Parse_Node *builtin_for_each(Parse_Node *args, Symbol_Table *env) {
     cur = cur->next;
   }
   return ret;
+}
+
+Parse_Node *builtin_set(Parse_Node *args, Symbol_Table *env) {
+  int nargs = args->length();
+  if (nargs != 2) {
+    fprintf(stderr, "defsym takes exactly two arguments.\nInstead received %d\n", nargs);
+    return nullptr;
+  }
+
+  Parse_Node *sym = args->first;
+  
+  if (!is_list(sym) && !is_sym(sym)) {
+    fprintf(stderr, "first argument given to defsym was not a symbol or list\n");
+    return nullptr;
+  }
+  
+  Parse_Node *val = eval_parse_node(args->next->first, env);
+  
+  if (is_sym(sym)) {    
+    env->set(sym->token.name, val);  
+    return sym;
+  }
+
+  Parse_Node *acc_form = sym;
+  sym = sym->first;
+  if (!is_sym(sym)) {
+    fprintf(stderr, "set invalid accessor, %s is not a symbol\n", sym->cprint());
+    return nullptr;
+  }
+  
+  std::string sy = sym->token.name;
+  
+  Parse_Node *place;
+  if (sy == "first") {
+    place = set_first(acc_form->next, env);
+    place->first = val;
+
+  } else if (sy == "last") {
+    place = set_last(acc_form->next, env);
+    
+  } else if (sy == "nth") {
+    place = set_nth(acc_form->next, env);
+    
+  } else {
+    fprintf(stderr, "Error: no set accessor named %s found\n", sy.c_str());
+    return nullptr;
+  }
+  if (is_string(place)) {
+    if (!is_string(val)) {
+      fprintf(stderr, "Error: can only set a character to be a character\n");
+      return nullptr;
+    }
+    char newc = val->token.name[0];
+    if (sy == "first") {
+      place->token.name[0] = newc;
+
+    } else if (sy == "last") {
+      int l = place->token.name.length() - 1;
+      place->token.name[l] = newc;
+    
+    } else if (sy == "nth") {
+      place->token.name[place->val.u64] = newc;
+    
+    } else {
+      fprintf(stderr, "Error: no set accessor named %s found\n", sy.c_str());
+      return nullptr;
+    }
+  }
+  
+  place->first = val;
+  return val;
 }
 
 void load_file(std::string file_name, Symbol_Table *env) {
