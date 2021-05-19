@@ -9,6 +9,11 @@ const char *parse_node_types[] = {
   "PARES_NODE_FUNCTION"
 };
 
+Parse_Node *Parser::parse_text(std::string input) {
+  lex.feed(input);
+  return parse_next_token();
+}
+
 void Parser::parse_top_level_expressions() {
   Token t = lex.peek_next_token();
   while (t.type != TOKEN_END_OF_FILE) {
@@ -20,7 +25,7 @@ void Parser::parse_top_level_expressions() {
 
 Parse_Node *Parser::parse_next_token() {
   Token t = lex.next_token();
-  
+
   switch (t.type) {
   case TOKEN_L_PAREN: {
     Parse_Node *list = parse_list(t);
@@ -126,7 +131,6 @@ Parse_Node *Parser::parse_next_token() {
   }
     
   case TOKEN_END_OF_FILE: {
-    printf("hehhhere\n");
     return nullptr;
   }
 

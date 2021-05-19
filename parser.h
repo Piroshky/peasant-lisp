@@ -13,7 +13,8 @@ enum Parse_Node_Type {
   PARSE_NODE_SYMBOL,
   PARSE_NODE_LITERAL,
   PARSE_NODE_FUNCTION,
-  PARSE_NODE_SYNTAX
+  PARSE_NODE_SYNTAX,
+  PARSE_NODE_ERROR
 };
 
 std::string print_parse_node_type(Parse_Node_Type);
@@ -75,7 +76,13 @@ struct Parser {
   Parser(const char* file) {
     lex = Lexer(file);
   }
-  
+
+  Parser() {
+    lex = Lexer();
+    lex.filename = "repl";
+  }
+
+  Parse_Node *parse_text(std::string input);
   void parse_top_level_expressions();
   Parse_Node *parse_next_token();
   Parse_Node *parse_list(Token start);

@@ -125,16 +125,24 @@ Token Lexer::read_number() {
 
 Token Lexer::read_identifier() {
   Token t;
+  t.name.resize(0);  
   t.type = TOKEN_IDENTIFIER;
   t.start_line = line;
   t.start_char = character;
-
+  
+  int source_size = source.size();
   char c = source[pos];
+  int count = 0;
   while (c != ' ' && c != '\n' && c != '\t' && c != '(' && c != ')') {
     t.name.push_back(c);
+    ++count;
     pos++;
     character++;
-    c = source[pos];
+    if (pos < source_size) {
+      c = source[pos];
+    } else {
+      break;
+    }
   }
 
   t.stop_line = line;
@@ -169,6 +177,13 @@ Token Lexer::read_string() {
   t.stop_line = line;
   t.stop_char = character;
   return t;
+}
+
+void Lexer::feed(std::string input) {
+  pos = 0;
+  line = 1;
+  character = 1;
+  source = input;
 }
 
 /*******************/

@@ -3,6 +3,7 @@
 #include "interp.h"
 #include "builtin_math.h"
 #include "builtin_logic.h"
+#include "interp_exceptions.h"
 
 Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env);
 Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env);
@@ -11,25 +12,7 @@ Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool is_fun);
 
-struct returnException: public std::exception {
-  Parse_Node *ret;
-  const char * what () const throw () {
-    return "";
-  }
-  returnException(Parse_Node *r) {
-    ret = r;
-  }
-};
 
-struct runtimeError: public std::exception {
-  std::string err;
-  const char * what () const throw () {
-    return err.c_str();
-  }
-  runtimeError(std::string e) {
-    err = e;
-  }
-};
 
 bool is_integer(Parse_Node *node) {
   return (node->subtype == LITERAL_INTEGER);
@@ -61,6 +44,10 @@ bool is_empty_list(Parse_Node *node) {
 
 bool is_sequence(Parse_Node *node) {
   return is_list(node) || is_string(node);
+}
+
+bool is_error(Parse_Node *node) {
+  return (node->type == PARSE_NODE_ERROR);
 }
 
 Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
@@ -113,7 +100,7 @@ Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
     }
   } catch (runtimeError e) {
     fprintf(stderr, "%s", e.what());
-    return nullptr;
+    return new Parse_Node{PARSE_NODE_ERROR};
   }
   return nullptr;
 }
@@ -482,6 +469,8 @@ Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
 
   Parse_Node *val = eval_parse_node(args->next->first, env);
   env->table[sym->token.name] = val;
+  Parse_Node *inserted =   env->table[sym->token.name];
+  printf("%s\n", inserted->cprint());
   
   return sym;
 }

@@ -23,3 +23,20 @@
 	    ,@body
 	    ,(nth 3 args))
      ,(last args)))
+
+(defun max (number &rest more-numbers)
+  (unless more-numbers (return number))
+  (let ((m number))
+    (for-each (y more-numbers)
+	      (if (> y m)
+		  (set m y)))
+    m))
+
+
+(defun min (number &rest more-numbers)
+  (unless more-numbers (return number))
+  (let ((m number))
+    (for-each (y more-numbers)
+	      (if (< y m)
+		  (set m y)))
+    m))

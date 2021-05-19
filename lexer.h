@@ -44,14 +44,19 @@ struct Lexer {
 
   uint64_t current_token = -1;
   std::vector<Token> tokens;
-  
+
   Lexer() {}
+  
+  Lexer(std::string input) {
+
+  }
   
   Lexer(const char* file) {
     source = get_whole_file(file);
     filename = file;
   }
 
+  void feed(std::string);
   void eat_white_space();
   Token next_token();
   Token peek_next_token();

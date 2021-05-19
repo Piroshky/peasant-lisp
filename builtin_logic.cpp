@@ -11,15 +11,18 @@ bool is_bool(Parse_Node *node) {
   return (node->subtype == LITERAL_BOOLEAN);
 }
 
+bool bool_value(Parse_Node *node) {
+  if (is_bool(node)) {
+    return node->val.b;
+  }
+  return true;
+}
+
 Parse_Node *builtin_and(Parse_Node *args, Symbol_Table *env) {
   while(args->first != nullptr) {
     Parse_Node *earg = eval_parse_node(args->first, env);
-    if (!is_bool(earg)) {
-      fprintf(stderr, "Error: argument does not evaluate to boolean: %s\n",
-	      args->first->cprint());
-      return nullptr;
-    }
-    if (earg->val.b == false) {
+    bool val = bool_value(earg);
+    if (val == false) {
       return fal;
     }    
     args = args->next;
@@ -30,12 +33,8 @@ Parse_Node *builtin_and(Parse_Node *args, Symbol_Table *env) {
 Parse_Node *builtin_or(Parse_Node *args, Symbol_Table *env) {
   while(args->first != nullptr) {
     Parse_Node *earg = eval_parse_node(args->first, env);
-    if (!is_bool(earg)) {
-      fprintf(stderr, "Error: argument does not evaluate to boolean: %s\n",
-	      args->first->cprint());
-      return nullptr;
-    }
-    if (earg->val.b == true) {
+    bool val = bool_value(earg);
+    if (val) {
       return tru;
     }    
     args = args->next;
@@ -48,12 +47,8 @@ Parse_Node *builtin_not(Parse_Node *args, Symbol_Table *env) {
     fprintf(stderr, "Error: not takes exactly 1 argument\n");
   }
   Parse_Node *earg = eval_parse_node(args->first, env);
-  if (!is_bool(earg)) {
-    fprintf(stderr, "Error: argument does not evaluate to boolean: %s\n",
-	    args->first->cprint());
-    return nullptr;
-  }
-  if (earg->val.b) {
+  bool val = bool_value(earg);
+  if (val) {
     return fal;
   }
   return tru;
