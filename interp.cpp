@@ -9,7 +9,7 @@ Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env);
 Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
-Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env);
+Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool is_fun);
 
 struct returnException: public std::exception {
   Parse_Node *ret;
@@ -144,7 +144,7 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
     return expand_eval_macro(func, node, env);
 
   case FUNCTION_NATIVE:
-    return apply_fun(func, node, env);
+    return apply_fun(func, node, env, true);
       
   default: 
     throw runtimeError("Error: unknown function subtype\n");
@@ -183,7 +183,8 @@ Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env) {
 }
 
 
-Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env) {
+Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool is_fun) {
+  // if is_fun we evaluate the arguments, if not is_fun then it's a macro so no argument evaluation
   Symbol_Table *fun_env = new Symbol_Table(env);
   
   // bind given arguments to symbols in fun-params
@@ -191,11 +192,77 @@ Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env) {
   Parse_Node *cur_arg = node->next;
   while (!is_empty_list(cur_param)) {
     Parse_Node *param = cur_param->first;
-    fun_env->table[param->token.name] = eval_parse_node(cur_arg->first, env);
+    Parse_Node *arg;
+
+    if (param->token.name == "&rest") {
+      cur_param = cur_param->next;
+      param = cur_param->first;
+
+      if (is_fun) {
+	Parse_Node *rest = new Parse_Node{PARSE_NODE_LIST};
+	Parse_Node *cur_rest = rest;
+	while (!is_empty_list(cur_arg)) {
+	  cur_rest->first = eval_parse_node(cur_arg->first, env);
+	  cur_rest->next = new Parse_Node{PARSE_NODE_LIST};
+	  cur_rest = cur_rest->next;
+	  cur_arg = cur_arg->next;
+	}
+        arg = rest;
+	
+      } else {
+        arg = cur_arg;
+      }
+      // cur_param = cur_param->next;
+      fun_env->table[param->token.name] = arg;
+      break;
+      
+    } else if (param->token.name == "&opt" || param->token.name == "&optional") {
+
+      cur_param = cur_param->next;
+      while (!is_empty_list(cur_param)) {
+	if (is_list(cur_param->first)) { // if the paramater has a default...
+	  Parse_Node *sym = cur_param->first->first;
+
+	  if (is_empty_list(cur_arg)) { // evaluate the default if no arg provided
+	    Parse_Node *val = cur_param->first->next->first;
+	    arg = eval_parse_node(val, env);
+	  } else { 
+	    arg = eval_parse_node(cur_arg->first, env);
+	  }
+	  fun_env->table[sym->token.name] = arg;
+	  
+	} else {
+	  Parse_Node *sym = cur_param->first;
+	  if (is_empty_list(cur_arg)) {
+	    fun_env->table[sym->token.name] = fal;
+	  } else {
+	    if (is_fun) {
+	      arg = eval_parse_node(cur_arg->first, env);
+	    } else {
+	      arg = cur_arg->first;
+	    }
+	    fun_env->table[sym->token.name] = arg;
+	  }
+	}
+	cur_param = cur_param->next;
+	cur_arg = cur_arg->next;
+      }
+      continue;
+      
+    } else {
+      if (is_fun) {
+	arg = eval_parse_node(cur_arg->first, env);
+      } else {
+	arg = cur_arg->first;
+      }
+    }
+    
+    fun_env->table[param->token.name] = arg;
     cur_param = cur_param->next;
     cur_arg = cur_arg->next;
   }
-
+  
+  // evaluate the body
   Parse_Node *cur = fun->next;
   Parse_Node *ret;
   while (!is_empty_list(cur)) {
@@ -239,10 +306,7 @@ Parse_Node *expand_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env)
   while (!is_empty_list(cur_param)) {
     Parse_Node *param = cur_param->first;
     Parse_Node *arg = cur_arg->first;
-    if (!is_sym(param)) {
-      throw runtimeError("Error: macro parameter" + param->print() +
-			 "is not a symbol\n");
-    }
+
 
     if (param->token.name == "&rest") {
       param = cur_param->next->first;
@@ -267,7 +331,7 @@ Parse_Node *expand_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env)
 }
 
 Parse_Node *expand_eval_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {
-  Parse_Node *expand = expand_macro(macro, node, env);
+  Parse_Node *expand = apply_fun(macro, node, env, false);
   return eval_parse_node(expand, env);
 }
 
@@ -297,49 +361,88 @@ Parse_Node *builtin_quote(Parse_Node *args, Symbol_Table *env) {
   return q;
 }
 
-Parse_Node *builtin_defun(Parse_Node *args, Symbol_Table *env) {
+Parse_Node *build_function(Parse_Node *args, Symbol_Table *env, bool is_fun) {
+  std::string obj_type = (is_fun ? "function" : "macro");
+  std::string abbrev = (is_fun ? "func" : "macro");
+  std::string builtin_name = (is_fun ? "defun" : "defmacro");
+
   int nargs = args->length();
   if (nargs < 2) {
-    fprintf(stderr, "Error: defun requires a fun-name argument, and an fun-params argument\n");
-    return nullptr;
+    throw runtimeError("Error: "
+		       + builtin_name + " requires a " +
+		       abbrev + "-name argument, and a " +
+		       abbrev +  "-params argument\n");
   }
 
   Parse_Node *fun_name = args->first;
   if (!is_sym(fun_name)) {
-    throw runtimeError("Error: argument fun-name requires a symbol\n");
+    throw runtimeError("Error: argument " + abbrev +  "-name requires a symbol\n");
   }
 
   Parse_Node *fun_params = args->next->first;
   if (!is_list(fun_params)) {
-    throw runtimeError("Error: argument fun-params requires a list\n");
+    throw runtimeError("Error: argument " + abbrev + "-params requires a list\n");
   }
 
-  Parse_Node *cur_param = fun_params;
-  while (!is_empty_list(cur_param)) {
-    Parse_Node *param = cur_param->first;
+  Parse_Node *param_list = fun_params;
+  while (!is_empty_list(param_list)) {
+    Parse_Node *param = param_list->first;
 
     if (!is_sym(param)) {
-      throw runtimeError("Error: function parameter `" + param->print() +
+      throw runtimeError("Error: " + obj_type
+			  +
+			 " parameter `" + param->print() +
 			 "` is not a symbol\n");
     }
     
     if (param->token.name == "&rest") {
-      cur_param = cur_param->next;
-      param = cur_param->first;
+      param_list = param_list->next;
+      param = param_list->first;
       if (param == nullptr) {
 	throw runtimeError("Error: paramater required after &rest\n");
       }
 
-      cur_param = cur_param->next;
-      if (cur_param->first != nullptr) {
+      param_list = param_list->next;
+      if (param_list->first != nullptr) {
 	throw runtimeError("Error: there can only be one parameter after &rest\n");
       }
       continue;
     }
-    cur_param = cur_param->next;
+
+    if (param->token.name == "&opt" || param->token.name == "&optional") {
+      param_list = param_list->next;
+      param = param_list->first;
+      if (param == nullptr) {
+	throw runtimeError("Error: one or more paramater required after &optional\n");
+      }
+
+      param_list = param_list->next;
+      while (!is_empty_list(param_list)) {
+	param = param_list->first;
+	if (is_list(param)) {
+	  if (param->length() != 2) {
+	    throw runtimeError("Error: two items required in lists after &optional\n"
+	                       "       A symbol, and a default value\n");
+	  }
+	  if (!is_sym(param->first)) {
+	    throw runtimeError("Error: first item in parameter default list " +
+			       param->print() +
+			       + " is not a symbol\n");
+	  }
+	}
+	param_list = param_list->next;
+      }
+      continue;
+    }
+    param_list = param_list->next;
   }
 
-  Parse_Node *new_fun = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_NATIVE};
+  Parse_Node *new_fun = new Parse_Node{PARSE_NODE_FUNCTION};
+  if (is_fun) {
+    new_fun->subtype = FUNCTION_NATIVE;
+  } else {
+    new_fun->subtype = FUNCTION_MACRO;
+  }
   new_fun->token = fun_name->token;
   new_fun->first = fun_params;
   new_fun->next = args->next->next;
@@ -348,59 +451,17 @@ Parse_Node *builtin_defun(Parse_Node *args, Symbol_Table *env) {
   return new_fun;
 }
 
+Parse_Node *builtin_defun(Parse_Node *args, Symbol_Table *env) {
+  return build_function(args, env, true);
+}
+
 Parse_Node *builtin_return(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *earg = eval_parse_node(args->first, env);
   throw returnException(earg);
 }
 
 Parse_Node *builtin_defmacro(Parse_Node *args, Symbol_Table *env) {
-  int nargs = args->length();
-  if (nargs < 2) {
-    throw runtimeError("Error: defmacro requires a macro-name argument, and a macro-params argument\n");
-  }
-
-  Parse_Node *macro_name = args->first;
-  if (!is_sym(macro_name)) {
-    throw runtimeError("Error: argument macro-name requires a symbol\n");
-  }
-
-  Parse_Node *macro_params = args->next->first;
-  if (!is_list(macro_params)) {
-    throw runtimeError("Error: argument macro-params requires a list\n");
-  }
-
-  //Validate that the argument list is properly formed  
-  Parse_Node *cur_param = macro_params;
-  while (!is_empty_list(cur_param)) {
-    Parse_Node *param = cur_param->first;
-    if (!is_sym(param)) {
-      throw runtimeError("Error: macro parameter `" + param->print() +
-			 "` is not a symbol\n");
-    }
-
-    if (param->token.name == "&rest") {
-      cur_param = cur_param->next;
-      param = cur_param->first;
-      if (param == nullptr) {
-	throw runtimeError("Error: paramater required after &rest\n");
-      }
-
-      cur_param = cur_param->next;
-      if (cur_param->first != nullptr) {
-	throw runtimeError("Error: there can only be one parameter after &rest\n");
-      }
-      continue;
-    }
-    cur_param = cur_param->next;
-  }
-  
-  Parse_Node *new_macro = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_MACRO};
-  new_macro->token = macro_name->token;
-  new_macro->first = macro_params; //reuse the cons cells slots
-  new_macro->next = args->next->next;
-  
-  env->table[macro_name->token.name] = new_macro;
-  return new_macro;
+  return build_function(args, env, false);
 }
 
 Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
