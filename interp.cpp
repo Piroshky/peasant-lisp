@@ -1,4 +1,5 @@
 #include <iostream>
+#include <exception>
 #include "interp.h"
 #include "builtin_math.h"
 #include "builtin_logic.h"
@@ -9,6 +10,30 @@ Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env);
+
+struct returnException: public std::exception {
+  Parse_Node *ret;
+  const char * what () const throw () {
+    return "";
+  }
+  returnException(Parse_Node *r) {
+    ret = r;
+  }
+};
+
+struct runtimeError: public std::exception {
+  std::string err;
+  const char * what () const throw () {
+    return err.c_str();
+  }
+  runtimeError(std::string e) {
+    err = e;
+  }
+};
+
+bool is_integer(Parse_Node *node) {
+  return (node->subtype == LITERAL_INTEGER);
+}
 
 bool is_string(Parse_Node *node) {
   if (node->type != PARSE_NODE_LITERAL) {
@@ -39,52 +64,57 @@ bool is_sequence(Parse_Node *node) {
 }
 
 Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
-  switch (node->type) {
-  case PARSE_NODE_LITERAL: {
-    return node;
-  }
-
-  case PARSE_NODE_LIST: {
-    return eval_list(node, env);
-    break;
-  }
-    
-  case PARSE_NODE_SYMBOL: {
-    if (is_keyword(node)) {
+  try {
+    switch (node->type) {
+    case PARSE_NODE_LITERAL: {
       return node;
     }
-    
-    return env->lookup(node->token.name);
-    break;
-  }
-  case PARSE_NODE_SYNTAX: {
-    switch (node->subtype) {
-    case SYNTAX_QUOTE: {
-      return node->first;      
-      break;
-    }
-    case SYNTAX_BACKTICK: {
-      return eval_backtick(node->first, env);
-      break;
-    }
-    case SYNTAX_COMMA: {
-      fprintf(stderr, "Error: comma found not inside backtick\n");
-      return nullptr;
-      break;
-    }
-    case SYNTAX_COMMA_AT: {
-      fprintf(stderr, "Error: ,@ found not inside backtick or unquoted list\n");
-      return nullptr;
-      break;
-    }
-    }
 
-    break;
-  }
-  default:
-    fprintf(stderr, "Error: could not evaluate unknown type\n");
+    case PARSE_NODE_LIST: {
+      return eval_list(node, env);
+      break;
+    }
+    
+    case PARSE_NODE_SYMBOL: {
+      if (is_keyword(node)) {
+	return node;
+      }
+    
+      return env->lookup(node->token.name);
+      break;
+    }
+    case PARSE_NODE_SYNTAX: {
+      switch (node->subtype) {
+      case SYNTAX_QUOTE: {
+	return node->first;      
+	break;
+      }
+      case SYNTAX_BACKTICK: {
+	return eval_backtick(node->first, env);
+	break;
+      }
+      case SYNTAX_COMMA: {
+	fprintf(stderr, "Error: comma found not inside backtick\n");
+	throw runtimeError("Error: comma found not inside backtick\n");
+	break;
+      }
+      case SYNTAX_COMMA_AT: {
+	fprintf(stderr, "Error: ,@ found not inside backtick or unquoted list\n");
+	return nullptr;
+	break;
+      }
+      }
+
+      break;
+    }
+    default:
+      fprintf(stderr, "Error: could not evaluate unknown type\n");
+      return nullptr;
+    }
+  } catch (runtimeError e) {
+    fprintf(stderr, "%s", e.what());
     return nullptr;
-  }  
+  }
   return nullptr;
 }
 
@@ -98,40 +128,27 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
 
   Parse_Node *func_sym = node->first;
   if (func_sym->type != PARSE_NODE_SYMBOL) {
-    fprintf(stderr, "Error: invalid function call, %s is not a symbol\n", func_sym->cprint());
-    fprintf(stderr, "     in list: %s\n", node->cprint());
-    return nullptr;
+    throw runtimeError( "Error: invalid function call, " + func_sym->print() + " is not a symbol\n" );
   }
 
   Parse_Node *func = env->lookup(func_sym->token.name);
   if (func == nullptr) {
-    fprintf(stderr, "Error: could not find function or macro named %s\n", func_sym->cprint());
-    return nullptr;
+    throw runtimeError("Error: could not find function or macro named " + func_sym->print() + "\n");
   }
   
   switch (func->subtype) {
-  case FUNCTION_BUILTIN: {
+  case FUNCTION_BUILTIN: 
     return func->val.func(node->next, env);
-    break;
-  }
-  case FUNCTION_MACRO: {
+  
+  case FUNCTION_MACRO: 
     return expand_eval_macro(func, node, env);
-    break;
-  }
-  case FUNCTION_NATIVE: {
+
+  case FUNCTION_NATIVE:
     return apply_fun(func, node, env);
-    break;
+      
+  default: 
+    throw runtimeError("Error: unknown function subtype\n");
   }
-    
-  default: {
-    fprintf(stderr, "Error: function type not recognized\n");
-    fprintf(stderr, "node: %s\n", node->cprint());
-    fprintf(stderr, "func_sym: %s\n", func_sym->cprint());
-    fprintf(stderr, "func: %s\n", func->cprint());
-    return nullptr;
-    break;
-  }
-  }  
 }
 
 Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env) {
@@ -142,10 +159,10 @@ Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env) {
     if (node->first->subtype == SYNTAX_COMMA_AT) {
       Parse_Node *elist = eval_parse_node(node->first->first, env);
       if (!is_list(elist)) {
-	fprintf(stderr, "Error: ,@ can only be used with list, %s is not a list\n",
-		node->first->first->cprint());
-	return nullptr;
-      }      
+	throw runtimeError("Error: ,@ can only be used with list, "
+			   + node->first->first->print() +
+			   "is not a list\n");
+      }
       if (prev == nullptr) {
 	ret = elist;
       } else {
@@ -169,39 +186,26 @@ Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env) {
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env) {
   Symbol_Table *fun_env = new Symbol_Table(env);
   
-  // bind given arguments to symbols in macro-args
+  // bind given arguments to symbols in fun-params
   Parse_Node *cur_param = fun->first;
   Parse_Node *cur_arg = node->next;
-  while (cur_param->first != nullptr) {
+  while (!is_empty_list(cur_param)) {
     Parse_Node *param = cur_param->first;
-    Parse_Node *arg = cur_arg->first;
-    switch(param->type) {
-    case PARSE_NODE_SYMBOL: {
-      fun_env->table[param->token.name] = eval_parse_node(arg, env);
-      break;
-    }
-    default: {
-      fprintf(stderr, "Shouldn't reach here\n");
-      fprintf(stderr, "cur_param: %s\n", cur_param->cprint());
-      fprintf(stderr, "arg type: %s\n", arg->print_type());
-      fprintf(stderr, "param type: %s\n", param->print_type());
-      fprintf(stderr, "arg: %s\n", arg->cprint());
-      fprintf(stderr, "param: %s\n", param->cprint());
-      return nullptr;
-      break;
-    }
-    }
+    fun_env->table[param->token.name] = eval_parse_node(cur_arg->first, env);
     cur_param = cur_param->next;
     cur_arg = cur_arg->next;
   }
 
   Parse_Node *cur = fun->next;
   Parse_Node *ret;
-  while (cur->first != nullptr) {
-    ret = eval_parse_node(cur->first, fun_env);
-    cur = cur->next;
-  }
-  
+  while (!is_empty_list(cur)) {
+    try {
+      ret = eval_parse_node(cur->first, fun_env);
+    } catch (returnException e) {
+      return e.ret;
+    }
+    cur = cur->next;    
+  }  
   return ret;
 }
 
@@ -219,11 +223,10 @@ Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env) {
 Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env) {
   Parse_Node *ret = node;
   node = expand_splice(node, env);
-  while (node->first != nullptr) {
+  while (!is_empty_list(node)) {
     node->first = eval_backtick(node->first, env);
     node = node->next;
-  }
-  
+  }  
   return ret;
 }
 
@@ -233,27 +236,17 @@ Parse_Node *expand_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env)
   // bind given arguments to symbols in macro-args
   Parse_Node *cur_param = macro->first;
   Parse_Node *cur_arg = node->next;
-  while (cur_param->first != nullptr) {
+  while (!is_empty_list(cur_param)) {
     Parse_Node *param = cur_param->first;
     Parse_Node *arg = cur_arg->first;
-    if (param->type != PARSE_NODE_SYMBOL) {
-      fprintf(stderr, "Error: macro parameter %s is not a symbol\n", param->cprint());
-      return nullptr;
+    if (!is_sym(param)) {
+      throw runtimeError("Error: macro parameter" + param->print() +
+			 "is not a symbol\n");
     }
 
     if (param->token.name == "&rest") {
-      cur_param = cur_param->next;
-      param = cur_param->first;
-      if (param == nullptr) {
-	fprintf(stderr, "Error: variable required after &rest\n");
-	return nullptr;
-      }
+      param = cur_param->next->first;
       macro_env->table[param->token.name] = cur_arg;
-      cur_param = cur_param->next;
-      if (cur_param->first != nullptr) {
-	fprintf(stderr, "Error: there should only be one parameter after &rest\n");
-	return nullptr;
-      }
       continue;
     } else {
       macro_env->table[param->token.name] = arg;
@@ -307,53 +300,103 @@ Parse_Node *builtin_quote(Parse_Node *args, Symbol_Table *env) {
 Parse_Node *builtin_defun(Parse_Node *args, Symbol_Table *env) {
   int nargs = args->length();
   if (nargs < 2) {
-    fprintf(stderr, "Error: defun requires a fun-name argument, and an fun-args argument\n");
+    fprintf(stderr, "Error: defun requires a fun-name argument, and an fun-params argument\n");
     return nullptr;
   }
 
   Parse_Node *fun_name = args->first;
-  if (fun_name->type != PARSE_NODE_SYMBOL) {
-    fprintf(stderr, "Error: argument fun-name requires a symbol\n");
-    return nullptr;
+  if (!is_sym(fun_name)) {
+    throw runtimeError("Error: argument fun-name requires a symbol\n");
   }
 
-  Parse_Node *fun_args = args->next->first;
-  if (fun_args->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: argument fun-args requires a list\n");
-    return nullptr;
+  Parse_Node *fun_params = args->next->first;
+  if (!is_list(fun_params)) {
+    throw runtimeError("Error: argument fun-params requires a list\n");
+  }
+
+  Parse_Node *cur_param = fun_params;
+  while (!is_empty_list(cur_param)) {
+    Parse_Node *param = cur_param->first;
+
+    if (!is_sym(param)) {
+      throw runtimeError("Error: function parameter `" + param->print() +
+			 "` is not a symbol\n");
+    }
+    
+    if (param->token.name == "&rest") {
+      cur_param = cur_param->next;
+      param = cur_param->first;
+      if (param == nullptr) {
+	throw runtimeError("Error: paramater required after &rest\n");
+      }
+
+      cur_param = cur_param->next;
+      if (cur_param->first != nullptr) {
+	throw runtimeError("Error: there can only be one parameter after &rest\n");
+      }
+      continue;
+    }
+    cur_param = cur_param->next;
   }
 
   Parse_Node *new_fun = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_NATIVE};
   new_fun->token = fun_name->token;
-  new_fun->first = fun_args;
+  new_fun->first = fun_params;
   new_fun->next = args->next->next;
   
   env->table[fun_name->token.name] = new_fun;
   return new_fun;
 }
 
+Parse_Node *builtin_return(Parse_Node *args, Symbol_Table *env) {
+  Parse_Node *earg = eval_parse_node(args->first, env);
+  throw returnException(earg);
+}
+
 Parse_Node *builtin_defmacro(Parse_Node *args, Symbol_Table *env) {
   int nargs = args->length();
   if (nargs < 2) {
-    fprintf(stderr, "Error: defmacro requires a macro-name argument, and an macro-args argument\n");
-    return nullptr;
+    throw runtimeError("Error: defmacro requires a macro-name argument, and a macro-params argument\n");
   }
 
   Parse_Node *macro_name = args->first;
-  if (macro_name->type != PARSE_NODE_SYMBOL) {
-    fprintf(stderr, "Error: argument macro-name requires a symbol\n");
-    return nullptr;
+  if (!is_sym(macro_name)) {
+    throw runtimeError("Error: argument macro-name requires a symbol\n");
   }
 
-  Parse_Node *macro_args = args->next->first;
-  if (macro_args->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: argument macro-args requires a list\n");
-    return nullptr;
+  Parse_Node *macro_params = args->next->first;
+  if (!is_list(macro_params)) {
+    throw runtimeError("Error: argument macro-params requires a list\n");
   }
 
+  //Validate that the argument list is properly formed  
+  Parse_Node *cur_param = macro_params;
+  while (!is_empty_list(cur_param)) {
+    Parse_Node *param = cur_param->first;
+    if (!is_sym(param)) {
+      throw runtimeError("Error: macro parameter `" + param->print() +
+			 "` is not a symbol\n");
+    }
+
+    if (param->token.name == "&rest") {
+      cur_param = cur_param->next;
+      param = cur_param->first;
+      if (param == nullptr) {
+	throw runtimeError("Error: paramater required after &rest\n");
+      }
+
+      cur_param = cur_param->next;
+      if (cur_param->first != nullptr) {
+	throw runtimeError("Error: there can only be one parameter after &rest\n");
+      }
+      continue;
+    }
+    cur_param = cur_param->next;
+  }
+  
   Parse_Node *new_macro = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_MACRO};
   new_macro->token = macro_name->token;
-  new_macro->first = macro_args; //reuse the cons cells slots
+  new_macro->first = macro_params; //reuse the cons cells slots
   new_macro->next = args->next->next;
   
   env->table[macro_name->token.name] = new_macro;
@@ -363,27 +406,18 @@ Parse_Node *builtin_defmacro(Parse_Node *args, Symbol_Table *env) {
 Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
   int nargs = args->length();
   if (nargs != 2) {
-    fprintf(stderr, "defsym takes exactly two arguments.\nInstead received %d\n", nargs);
-    return nullptr;
+    throw runtimeError("Error: defsym takes exactly two arguments.\n");
   }
 
   Parse_Node *sym = args->first;
   
-  if (sym->type != PARSE_NODE_SYMBOL) {
-    fprintf(stderr, "first argument given to defsym was not a symbol\n");
-    return nullptr;
+  if (!is_sym(sym)) {
+    throw runtimeError("Error: first argument given to defsym was not a symbol\n");
   }
 
   if(is_keyword(sym)) {
-    fprintf(stderr, "keyword symbols cannot be reassigned\n");
-    return nullptr;
+    throw runtimeError("Error: keyword symbols cannot be reassigned\n");
   }
-  
-  // std::map<std::string, Parse_Node *>::iterator it;
-  // it = env.table.find(sym.token.name);
-  // if (it == env.table.end()) {
-  //   //
-  // }
 
   Parse_Node *val = eval_parse_node(args->next->first, env);
   env->table[sym->token.name] = val;
@@ -391,12 +425,9 @@ Parse_Node *builtin_defsym(Parse_Node *args, Symbol_Table *env) {
   return sym;
 }
 
-
-
 Parse_Node *builtin_eval(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 1) {
-    fprintf(stderr, "Error: eval takes exactly one argument\n");
-    return nullptr;
+    throw runtimeError("Error: eval takes exactly one argument\n");
   }
   Parse_Node *arg = eval_parse_node(args->first, env);
   return eval_parse_node(arg, env);
@@ -408,11 +439,10 @@ Parse_Node *builtin_progn(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *cur = args;
   Parse_Node *ret = cur;
   
-  while (cur->first != nullptr) {
+  while (!is_empty_list(cur)) {
     ret = eval_parse_node(cur->first, env);
     cur = cur->next;
   }
-
   return ret;
 }
 
@@ -420,7 +450,7 @@ Parse_Node *builtin_list(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *list = new Parse_Node{PARSE_NODE_LIST};
   Parse_Node *cur = list;
   Parse_Node *arg = args;
-  while (arg->first != nullptr) {
+  while (!is_empty_list(arg)) {
     cur->first = eval_parse_node(arg->first, env);
     cur->next = new Parse_Node{PARSE_NODE_LIST};
     cur = cur->next;
@@ -431,19 +461,16 @@ Parse_Node *builtin_list(Parse_Node *args, Symbol_Table *env) {
 
 Parse_Node *set_first(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 1) {
-    fprintf(stderr, "Error: first takes exactly one argument\n");
-    return nullptr;
+    throw runtimeError("Error: first takes exactly one argument\n");
   }
 
   Parse_Node *earg = eval_parse_node(args->first, env);
   if(is_keyword(earg)) {
-    fprintf(stderr, "keyword symbols cannot be reassigned\n");
-    return nullptr;
+    throw runtimeError("keyword symbols cannot be reassigned\n");
   }
   
   if (!is_list(earg) && !is_string(earg)) {
-    fprintf(stderr, "Error: argument %s not a list\n", earg->cprint());
-    return nullptr;
+    throw runtimeError("Error: argument " + earg->print() + " not a list\n");
   }
   return earg;
 }
@@ -463,20 +490,14 @@ Parse_Node *builtin_first(Parse_Node *args, Symbol_Table *env) {
 
 Parse_Node *set_last(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 1) {
-    fprintf(stderr, "Error: last takes exactly one argument\n");
-    return nullptr;
+    throw runtimeError("Error: last takes exactly one argument\n");
   }
 
   Parse_Node *earg = eval_parse_node(args->first, env);
   if (!is_list(earg) && !is_string(earg)) {
     fprintf(stderr, "Error: argument %s not a sequence\n", earg->cprint());
   }
-
-  if (earg->first == nullptr) {
-    return earg;
-  }
-
-  if (is_string(earg)) {
+  if (!is_empty_list(earg) || is_string(earg)) {
     return earg;
   }
 
@@ -486,14 +507,13 @@ Parse_Node *set_last(Parse_Node *args, Symbol_Table *env) {
     prev = cur;
     cur = cur->next;
   }
-
   return prev;
 }
 
 Parse_Node *builtin_last(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *ret = set_last(args, env);
   // printf("builting got %s\n", ret->cprint());
-  if (ret == nullptr || ret->first == nullptr) {
+  if (ret == nullptr || is_empty_list(ret)) {
     return ret;  
   }
   if (is_string(ret)) {
@@ -501,30 +521,28 @@ Parse_Node *builtin_last(Parse_Node *args, Symbol_Table *env) {
     int l = ret->token.name.length() - 1;
     n->token.name = ret->token.name[l];
     return n;
-  }
-  
+  }  
   return ret->first;
 }
 
 Parse_Node *set_nth(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 2) {
-    fprintf(stderr, "Error: nth takes exactly two argument\n");
-    return nullptr;
+    throw runtimeError("Error: nth takes exactly two argument\n");
   }
 
   Parse_Node *n = eval_parse_node(args->first, env);
-  if (n->subtype != LITERAL_INTEGER) {
-    fprintf(stderr, "Error: argument %s not an integer\n", n->cprint());
+  if (!is_integer(n)) {
+    throw runtimeError("Error: argument " + n->print() + " not an integer\n");
   }
   
   Parse_Node *seq = eval_parse_node(args->next->first, env);
   if (!is_sequence(seq)) {
-    fprintf(stderr, "Error: argument %s not a sequence\n", seq->cprint());
+    throw runtimeError("Error: argument " + seq->print() + " not a sequence\n");
   }
 
   int nth = n->val.u64;
 
-  if (seq->subtype == LITERAL_STRING) {
+  if (is_string(seq)) {
     --nth;
     int len = seq->token.name.length();
     if (nth >= len) {
@@ -556,45 +574,37 @@ Parse_Node *builtin_nth(Parse_Node *args, Symbol_Table *env) {
     Parse_Node *n = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_STRING};
     n->token.name = ret->token.name[ret->val.u64];
     return n;
-  }
-  
+  }  
   return ret->first;  
 }
 
 Parse_Node *builtin_pop(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 1) {
-    fprintf(stderr, "Error: pop takes exactly one argument\n");
-    return nullptr;
+    throw runtimeError("Error: pop takes exactly one argument\n");
   }
 
   Parse_Node *earg = eval_parse_node(args->first, env);
-  if (earg->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: argument %s not a list\n", earg->cprint());
+  if (!is_list(earg)) {
+    throw runtimeError("Error: argument " + earg->print() + " not a list\n");
   }
-
-  if (earg->first == nullptr) {
+  if (is_empty_list(earg)) {
     return earg;
-  }  
-
+  }
   return earg->next;
 }
 
 Parse_Node *builtin_push(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 2) {
-    fprintf(stderr, "Error: pop takes exactly two argument\n");
-    return nullptr;
+    throw runtimeError("Error: pop takes exactly two argument\n");
   }
-  
   Parse_Node *earg2 = eval_parse_node(args->next->first, env);
-  if (earg2->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: argument %s not a list\n", earg2->cprint());
+  if (!is_list(earg2)) {
+    throw runtimeError("Error: argument " + earg2->print() + " not a list\n");
   }
-
   Parse_Node *earg1 = eval_parse_node(args->first, env);
   Parse_Node *ret = new Parse_Node{PARSE_NODE_LIST};
   ret->first = earg1;
   ret->next = earg2;
-
   return ret;
 }
 
@@ -1019,7 +1029,7 @@ Parse_Node *builtin_symbol_equal(Parse_Node *args, Symbol_Table *env) {
   return tru;
 }
 
-Parse_Node *builtin_symbol_equal(Parse_Node *args, Symbol_Table *env) {
+Parse_Node *builtin_string_equal(Parse_Node *args, Symbol_Table *env) {
   if (args->length() == 1) {
     fprintf(stderr, "Error: string= take 2+ arguments\n");
     return nullptr;
@@ -1087,8 +1097,9 @@ Symbol_Table create_base_environment() {
   env.insert("true", tru);
   env.insert("false", fal);
 
-  create_builtin("defun", builtin_defun, &env);
+  create_builtin("defun", builtin_defun, &env);  
   create_builtin("defmacro", builtin_defmacro, &env);
+  create_builtin("return", builtin_return, &env);
   create_builtin("expand", builtin_expand, &env);
   create_builtin("defsym", builtin_defsym, &env);
   create_builtin("set", builtin_set, &env);
