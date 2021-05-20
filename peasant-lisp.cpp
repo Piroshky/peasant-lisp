@@ -41,10 +41,12 @@ int main(int argc, char *argv[]) {
     std::string input;
     // std::cin.ignore();
     getline(std::cin, input);
-    Parse_Node *tree = parse.parse_text(input);
+    Parse_Node *tree = parse.parse_text(input);    
     Parse_Node *evaled = eval_parse_node(tree, &env);
     if (!is_error(evaled)) {
-      std::cout << "\E[31m" << evaled->print() << "\E[39m" << std::endl;
+      std::cout << "\e[31m"
+		<< evaled->print() << "\e[39m"
+		<< std::endl;
     } else {
       std::cout << std::endl;
     }

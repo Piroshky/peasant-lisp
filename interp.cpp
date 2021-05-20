@@ -1,5 +1,6 @@
 #include <iostream>
 #include <exception>
+#include <limits>
 #include "interp.h"
 #include "builtin_math.h"
 #include "builtin_logic.h"
@@ -11,8 +12,6 @@ Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool is_fun);
-
-
 
 bool is_integer(Parse_Node *node) {
   return (node->subtype == LITERAL_INTEGER);
@@ -102,6 +101,7 @@ Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
     fprintf(stderr, "%s", e.what());
     return new Parse_Node{PARSE_NODE_ERROR};
   }
+  fprintf(stderr, "Error: ran into unhandled parse_node to eval\n");
   return nullptr;
 }
 
@@ -1129,6 +1129,16 @@ Parse_Node *builtin_load(Parse_Node *args, Symbol_Table *env) {
   return tru;
 }
 
+Parse_Node *builtin_get_int(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 0) {
+    throw runtimeError("Error: get-int takes no arguments\n");
+  }
+  Parse_Node *ret = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER};
+  std::cin >> ret->val.u64;
+  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  return ret;
+}
+
 void create_builtin(std::string symbol, Parse_Node *(*func)(Parse_Node *, Symbol_Table *), Symbol_Table *env) {
   Parse_Node *f = new Parse_Node{PARSE_NODE_FUNCTION, FUNCTION_BUILTIN};
   f->val.func = func;
@@ -1165,6 +1175,7 @@ Symbol_Table create_base_environment() {
   create_builtin("type=", builtin_type_equal, &env);
   create_builtin("symbol=", builtin_symbol_equal, &env);
   create_builtin("string=", builtin_symbol_equal, &env);
+  create_builtin("get-int", builtin_get_int, &env);
 
   create_builtin("list", builtin_list, &env);
   create_builtin("first", builtin_first, &env);
