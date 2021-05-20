@@ -60,9 +60,9 @@ struct Parse_Node {
   int nesting_depth = 0;
   
   std::string print();
-  const char * cprint();
   void debug_print_parse_node();
-  const char *print_type();
+  std::string print_type();
+  std::string print_subtype();
   int length();
 };
 

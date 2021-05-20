@@ -6,7 +6,28 @@ const char *parse_node_types[] = {
   "PARSE_NODE_LIST",
   "PARSE_NODE_SYMBOL",
   "PARSE_NODE_LITERAL",
-  "PARES_NODE_FUNCTION"
+  "PARES_NODE_FUNCTION",
+  "PARES_NODE_SYNTAX",
+  "PARES_NODE_ERROR"
+};
+
+const char *parse_node_subtypes[] = {
+  "SUBTYPE_NONE",
+  "SYMBOL_KEYWORD",
+  "SYMBOL_FUNCTION",
+  "SYMBOL_SYMBOL",
+  "SYMBOL_VARIABLE",
+  "LITERAL_INTEGER",
+  "LITERAL_FLOAT",
+  "LITERAL_STRING",
+  "LITERAL_BOOLEAN",
+  "FUNCTION_MACRO",
+  "FUNCTION_BUILTIN",
+  "FUNCTION_NATIVE",
+  "SYNTAX_QUOTE",
+  "SYNTAX_BACKTICK",
+  "SYNTAX_COMMA",
+  "SYNTAX_COMMA_AT",
 };
 
 Parse_Node *Parser::parse_text(std::string input) {
@@ -190,7 +211,7 @@ std::string Parse_Node::print() {
       list += cur->first->print();
       if (cur->next->first != nullptr) {
 	list += " ";
-      }      
+      }
       cur = cur->next;
     }
     list += ")";
@@ -256,10 +277,6 @@ std::string Parse_Node::print() {
   }
 }
 
-const char * Parse_Node::cprint() {
-  return print().c_str();
-}
-
 void Parse_Node::debug_print_parse_node() {
 
   for(int i = 0; i < nesting_depth; i++) printf("  ");
@@ -281,6 +298,15 @@ std::string print_parse_node_type(Parse_Node_Type t) {
   return parse_node_types[t];  
 }
 
-const char * Parse_Node::print_type() {
-  return print_parse_node_type(type).c_str();
+std::string Parse_Node::print_type() {
+  return print_parse_node_type(type);
+}
+
+
+std::string print_parse_node_subtype(Parse_Node_Subtype t) {
+  return parse_node_subtypes[t];  
+}
+
+std::string Parse_Node::print_subtype() {
+  return print_parse_node_subtype(subtype);
 }

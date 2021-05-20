@@ -7,14 +7,12 @@
     `(if (not ,test) ,body)))
 
 (defmacro cond (&rest clauses)
-  (let ((body) (prev))
-    (for-each
-     (clause clauses)
-     (let ((cur (list 'if (first clause) (last clause))))
-       (if (= (length body) 0)
-	     (set body cur)	     
-	     (append cur prev))
-       (set prev cur)))
+  (when (empty? clauses) (return '()))
+  (let ((body) (cur) (prev))
+    (for-each (clause clauses)
+	      (set cur `(if ,(first clause) ,(last clause)))
+	      (if (empty? body) (set body cur) (append cur prev))
+	      (set prev cur))
     body))
 
 (defmacro for (args &rest body)

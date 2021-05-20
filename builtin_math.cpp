@@ -75,7 +75,7 @@ Parse_Node *builtin_greater_than_equal(Parse_Node *args, Symbol_Table *env) {
   
   if (!is_number(prev)) {
     fprintf(stderr, "Error: argument 1, %s, is not a number\n",
-	    prev->cprint());
+	    prev->print().c_str());
     return nullptr;
   }
   Parse_Node *cur = args->next;
@@ -83,7 +83,7 @@ Parse_Node *builtin_greater_than_equal(Parse_Node *args, Symbol_Table *env) {
     Parse_Node *ecur = eval_parse_node(cur->first, env);
     if (!is_number(ecur)) {
       fprintf(stderr, "Error: argument %s, is not a number",
-	      cur->first->cprint());
+	      cur->first->print().c_str());
       return nullptr;      
     }
     bool cur_int = (ecur->subtype == LITERAL_INTEGER);
@@ -117,7 +117,7 @@ Parse_Node *builtin_greater_than(Parse_Node *args, Symbol_Table *env) {
   
   if (!is_number(prev)) {
     fprintf(stderr, "Error: argument 1, %s, is not a number\n",
-	    prev->cprint());
+	    prev->print().c_str());
     return nullptr;
   }
   Parse_Node *cur = args->next;
@@ -125,7 +125,7 @@ Parse_Node *builtin_greater_than(Parse_Node *args, Symbol_Table *env) {
     Parse_Node *ecur = eval_parse_node(cur->first, env);
     if (!is_number(ecur)) {
       fprintf(stderr, "Error: argument %s, is not a number",
-	      cur->first->cprint());
+	      cur->first->print().c_str());
       return nullptr;      
     }
     bool cur_int = (ecur->subtype == LITERAL_INTEGER);
@@ -159,7 +159,7 @@ Parse_Node *builtin_less_than(Parse_Node *args, Symbol_Table *env) {
   
   if (!is_number(prev)) {
     fprintf(stderr, "Error: argument 1, %s, is not a number\n",
-	    prev->cprint());
+	    prev->print().c_str());
     return nullptr;
   }
   Parse_Node *cur = args->next;
@@ -167,7 +167,7 @@ Parse_Node *builtin_less_than(Parse_Node *args, Symbol_Table *env) {
     Parse_Node *ecur = eval_parse_node(cur->first, env);
     if (!is_number(ecur)) {
       fprintf(stderr, "Error: argument %s, is not a number",
-	      cur->first->cprint());
+	      cur->first->print().c_str());
       return nullptr;      
     }
     bool cur_int = (ecur->subtype == LITERAL_INTEGER);
@@ -201,7 +201,7 @@ Parse_Node *builtin_less_than_equal(Parse_Node *args, Symbol_Table *env) {
   
   if (!is_number(prev)) {
     fprintf(stderr, "Error: argument 1, %s, is not a number\n",
-	    prev->cprint());
+	    prev->print().c_str());
     return nullptr;
   }
   Parse_Node *cur = args->next;
@@ -209,7 +209,7 @@ Parse_Node *builtin_less_than_equal(Parse_Node *args, Symbol_Table *env) {
     Parse_Node *ecur = eval_parse_node(cur->first, env);
     if (!is_number(ecur)) {
       fprintf(stderr, "Error: argument %s, is not a number",
-	      cur->first->cprint());
+	      cur->first->print().c_str());
       return nullptr;      
     }
     bool cur_int = (ecur->subtype == LITERAL_INTEGER);
@@ -244,7 +244,7 @@ Parse_Node *builtin_equal(Parse_Node *args, Symbol_Table *env) {
 
   Parse_Node *first = eval_parse_node(args->first, env);
   if (!is_number(first)) {
-    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->print().c_str());
     return nullptr;
   }
   
@@ -260,7 +260,7 @@ Parse_Node *builtin_equal(Parse_Node *args, Symbol_Table *env) {
     Parse_Node *ecur = eval_parse_node(cur->first, env);
     if (!is_number(ecur)) {
       fprintf(stderr, "Error: argument %s, is not a number",
-	      cur->first->cprint());
+	      cur->first->print().c_str());
       return nullptr;      
     }
     bool cur_int = (ecur->subtype == LITERAL_INTEGER);          
@@ -291,7 +291,7 @@ Parse_Node *builtin_bitand(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *earg = eval_parse_node(args->first, env);
 
   if(!is_number(earg)) {
-    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->print().c_str());
     return nullptr;
   }
   
@@ -307,7 +307,7 @@ Parse_Node *builtin_bitand(Parse_Node *args, Symbol_Table *env) {
     earg = eval_parse_node(cur->first, env);
 
     if(!is_number(earg)) {
-      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->cprint());
+      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->print().c_str());
       return nullptr;
     }
     
@@ -332,7 +332,7 @@ Parse_Node *builtin_bitor(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *earg = eval_parse_node(args->first, env);
 
   if(!is_number(earg)) {
-    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->print().c_str());
     return nullptr;
   }
   
@@ -348,7 +348,7 @@ Parse_Node *builtin_bitor(Parse_Node *args, Symbol_Table *env) {
     earg = eval_parse_node(cur->first, env);
 
     if(!is_number(earg)) {
-      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->cprint());
+      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->print().c_str());
       return nullptr;
     }
     
@@ -373,7 +373,7 @@ Parse_Node *builtin_bitxor(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *earg = eval_parse_node(args->first, env);
 
   if(!is_number(earg)) {
-    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->print().c_str());
     return nullptr;
   }
   
@@ -389,7 +389,7 @@ Parse_Node *builtin_bitxor(Parse_Node *args, Symbol_Table *env) {
     earg = eval_parse_node(cur->first, env);
 
     if(!is_number(earg)) {
-      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->cprint());
+      fprintf(stderr, "Error: argument %s is not a number\n", cur->first->print().c_str());
       return nullptr;
     }
     
@@ -414,7 +414,7 @@ Parse_Node *builtin_bitnot(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *earg = eval_parse_node(args->first, env);
 
   if(!is_number(earg)) {
-    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->print().c_str());
     return nullptr;
   }
   
@@ -440,7 +440,7 @@ Parse_Node *builtin_bitshift_left(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *earg = eval_parse_node(args->first, env);
 
   if(!is_number(earg)) {
-    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->print().c_str());
     return nullptr;
   }
   
@@ -456,7 +456,7 @@ Parse_Node *builtin_bitshift_left(Parse_Node *args, Symbol_Table *env) {
   } else {
     Parse_Node *earg = eval_parse_node(args->next->first, env);
     if(earg->subtype != LITERAL_INTEGER) {
-      fprintf(stderr, "Error: argument %s is not an integer\n", args->next->first->cprint());
+      fprintf(stderr, "Error: argument %s is not an integer\n", args->next->first->print().c_str());
       return nullptr;
     }
     val <<= earg->val.u64;    
@@ -477,7 +477,7 @@ Parse_Node *builtin_bitshift_right(Parse_Node *args, Symbol_Table *env) {
   Parse_Node *earg = eval_parse_node(args->first, env);
 
   if(!is_number(earg)) {
-    fprintf(stderr, "Error: argument %s is not a number\n", args->first->cprint());
+    fprintf(stderr, "Error: argument %s is not a number\n", args->first->print().c_str());
     return nullptr;
   }
   
@@ -493,7 +493,7 @@ Parse_Node *builtin_bitshift_right(Parse_Node *args, Symbol_Table *env) {
   } else {
     Parse_Node *earg = eval_parse_node(args->next->first, env);
     if(earg->subtype != LITERAL_INTEGER) {
-      fprintf(stderr, "Error: argument %s is not an integer\n", args->next->first->cprint());
+      fprintf(stderr, "Error: argument %s is not an integer\n", args->next->first->print().c_str());
       return nullptr;
     }
     val >>= earg->val.u64;    
