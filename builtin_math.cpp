@@ -1,3 +1,4 @@
+#include "builtin_helpers.h"
 #include "builtin_math.h"
 #include "builtin_logic.h"
 
@@ -33,6 +34,60 @@ Parse_Node *builtin_add(Parse_Node *args, Symbol_Table *env) {
     s->val.u64 = sum;
   }
   return s;
+}
+
+Parse_Node *builtin_subtract(Parse_Node *args, Symbol_Table *env) {
+  int64_t start = 0;
+  double fstart = 0;
+  int64_t sum = 0;
+  double fsum = 0;
+  bool first_is_int = true;
+  bool rest_are_int = true;
+
+  Parse_Node *cur = args;
+  if (is_empty_list(cur)) {
+    throw runtimeError("Error: - takes one or more argument\n");
+  }
+
+  Parse_Node *arg = eval_parse_node(cur->first, env);
+  if (is_integer(arg)) {
+    start = arg->val.u64;
+  } else if (is_float(arg)) {
+    fstart = arg->val.dub;
+  } else {
+    throw runtimeError("Error: - was given non-number argument " + cur->first->print() + "\n");
+  }
+
+  cur = cur->next;
+
+  while (!is_empty_list(cur)) {
+    Parse_Node *arg = eval_parse_node(cur->first, env);
+    if (is_float(arg)) {
+      rest_are_int = false;
+      fsum += arg->val.dub;
+    } else if (is_integer(arg)) {
+      sum += arg->val.u64;
+    } else {
+      throw runtimeError("Error: - was given non-number argument "  + cur->first->print() + "\n");
+    }
+    cur = cur->next;
+  }
+  
+  Parse_Node *ret = new Parse_Node{PARSE_NODE_LITERAL};
+  if (first_is_int) {
+    if (rest_are_int) {
+      ret->subtype = LITERAL_INTEGER;
+      ret->val.u64 = start - sum;
+    } else {
+      ret->subtype = LITERAL_FLOAT;
+      ret->val.dub = start - (sum + fsum);
+    }
+  } else {
+    ret->subtype = LITERAL_FLOAT;
+    ret->val.dub = fstart - (sum + fsum);
+  }
+  
+  return ret;
 }
 
 Parse_Node *builtin_multiply(Parse_Node *args, Symbol_Table *env) {

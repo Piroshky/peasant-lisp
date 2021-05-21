@@ -240,7 +240,7 @@ std::string Parse_Node::print() {
       break;
     }
     case LITERAL_STRING: {
-      return '"' + token.name + '"';
+      return token.name;
       break;
     }
     }

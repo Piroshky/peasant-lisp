@@ -18,8 +18,6 @@ bool bool_value(Parse_Node *node) {
   return true;
 }
 
-
-
 Parse_Node *builtin_and(Parse_Node *args, Symbol_Table *env) {
   while(args->first != nullptr) {
     Parse_Node *earg = eval_parse_node(args->first, env);

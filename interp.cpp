@@ -2,6 +2,7 @@
 #include <exception>
 #include <limits>
 #include "interp.h"
+#include "builtin_helpers.h"
 #include "builtin_math.h"
 #include "builtin_logic.h"
 #include "interp_exceptions.h"
@@ -13,43 +14,13 @@ Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env);
 Parse_Node *expand_eval_macro(Parse_Node *func, Parse_Node *node, Symbol_Table *env);
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool is_fun);
 
-bool is_integer(Parse_Node *node) {
-  return (node->subtype == LITERAL_INTEGER);
-}
 
-bool is_string(Parse_Node *node) {
-  if (node->type != PARSE_NODE_LITERAL) {
-    return false;
-  }
-  return (node->subtype == LITERAL_STRING);
-}
-
-bool is_list(Parse_Node *node) {
-  return (node->type == PARSE_NODE_LIST);
-}
-
-bool is_sym(Parse_Node *node) {
-  return (node->type == PARSE_NODE_SYMBOL);
-}
-
-bool is_keyword(Parse_Node *node) {
-  return (node->subtype == SYMBOL_KEYWORD);
-}
-
-//assumes that node is a list
-bool is_empty_list(Parse_Node *node) {
-  return (node->first == nullptr);
-}
-
-bool is_sequence(Parse_Node *node) {
-  return is_list(node) || is_string(node);
-}
-
-bool is_error(Parse_Node *node) {
-  return (node->type == PARSE_NODE_ERROR);
-}
 
 Parse_Node *eval_parse_node(Parse_Node *node, Symbol_Table *env) {
+  if (node == nullptr) {
+    fprintf(stderr, "ERROR: RECEIVED NULLPTR TO EVAL\n");
+    exit(1);
+  }
   try {
     switch (node->type) {
     case PARSE_NODE_LITERAL: {
@@ -119,7 +90,7 @@ Parse_Node *eval_list(Parse_Node *node, Symbol_Table *env) {
   case FUNCTION_BUILTIN: 
     return func->val.func(node->next, env);
   
-  case FUNCTION_MACRO: 
+  case FUNCTION_MACRO:    
     return expand_eval_macro(func, node, env);
 
   case FUNCTION_NATIVE:
@@ -254,7 +225,9 @@ Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool
     cur_arg = cur_arg->next;
   }
   
-  // evaluate the body  
+  // evaluate the body
+  // printf("apply_fun: evaling body %s %s\n", is_fun ? "function" : "macro", fun->token.name.c_str());
+  
   Parse_Node *cur = fun->next;
   
   Parse_Node *ret;
@@ -266,6 +239,8 @@ Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool
     }
     cur = cur->next;    
   }
+
+  // printf("apply_fun: done evaling body %s %s\n", is_fun ? "function" : "macro", fun->token.name.c_str());
   return ret;
 }
 
@@ -295,8 +270,23 @@ Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env) {
 }
 
 Parse_Node *expand_eval_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table *env) {
-  Parse_Node *expand = apply_fun(macro, node, env, false);
-  return eval_parse_node(expand, env);
+  Parse_Node *expand;
+  try {
+    expand = apply_fun(macro, node, env, false);
+  } catch (returnException e) {
+    return e.ret;
+  }
+  
+  Parse_Node *ret;
+  ret = eval_parse_node(expand, env);
+  // nah...
+  // try {
+    
+  // } catch (returnException e) {
+  //   return e.ret;
+  // }  
+  
+  return ret;
 }
 
 Parse_Node *builtin_expand(Parse_Node *args, Symbol_Table *env) {
@@ -317,9 +307,10 @@ Parse_Node *builtin_expand(Parse_Node *args, Symbol_Table *env) {
 }
 
 Parse_Node *builtin_quote(Parse_Node *args, Symbol_Table *env) {
-  Parse_Node *q = new Parse_Node{PARSE_NODE_SYNTAX, SYNTAX_QUOTE};
-  q->first = args;
-  return q;
+  if (args->length() != 1) {
+    throw runtimeError("Error: quote takes exactly one argument\n");
+  }
+  return args->first;
 }
 
 Parse_Node *build_function(Parse_Node *args, Symbol_Table *env, bool is_fun) {
@@ -395,7 +386,7 @@ Parse_Node *build_function(Parse_Node *args, Symbol_Table *env, bool is_fun) {
 	param_list = param_list->next;
       }
       continue;
-    }
+    } 
     param_list = param_list->next;
   }
 
@@ -637,18 +628,16 @@ Parse_Node *builtin_push(Parse_Node *args, Symbol_Table *env) {
 
 Parse_Node *builtin_append(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 2) {
-    fprintf(stderr, "Error: append takes exactly two argument\n");
-    return nullptr;
+    throw runtimeError("Error: append takes exactly two argument\n");
   }
 
   Parse_Node *list = eval_parse_node(args->next->first, env);
   Parse_Node *end = list;
-  if (list->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: first argument to append, %s, is not a list\n", list->print().c_str());
-    return nullptr;
+  if (!is_list(list)) {
+    throw runtimeError("Error: first argument to append, " + list->print() + ", is not a list\n");
   }
 
-  while (end->first != nullptr) {
+  while (!is_empty_list(end)) {
     end = end->next;
   }
 
@@ -677,14 +666,12 @@ Parse_Node *builtin_string_concatenate(Parse_Node *args, Symbol_Table *env) {
 
 Parse_Node *builtin_length(Parse_Node *args, Symbol_Table *env) {
   if (args->length() != 1) {
-    fprintf(stderr, "Error: append takes exactly one argument\n");
-    return nullptr;
+    throw runtimeError("Error: append takes exactly one argument\n");
   } 
   
   Parse_Node *list = eval_parse_node(args->first, env);
   if (list->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: argument to length is not a list\n");
-    return nullptr;
+    throw runtimeError("Error: argument to length is not a list\n");
   }
 
   Parse_Node *ret = new Parse_Node{PARSE_NODE_LITERAL, LITERAL_INTEGER};
@@ -706,20 +693,18 @@ Parse_Node *builtin_empty_q(Parse_Node *args, Symbol_Table *env) {
 }
 
 Parse_Node *builtin_let(Parse_Node *args, Symbol_Table *env) {
-  if (args->first == nullptr) {
-    fprintf(stderr, "Error: too few arguments in `let`\n");
-    return nullptr;
+  if (is_empty_list(args)) {
+    throw runtimeError("Error: not enough arguments in `let`\n");
   }
 
   Symbol_Table *let_env = new Symbol_Table(env);
   Parse_Node *defs = args->first;
 
-  if (defs->type != PARSE_NODE_LIST) {
-    fprintf(stderr, "Error: invalid let bindings (not a list)\n");
-    return nullptr;
+  if (!is_list(defs)) {
+    throw runtimeError("Error: invalid let bindings (not a list)\n");
   }
   
-  while (defs->first != nullptr) {
+  while (!is_empty_list(defs)) {
     Parse_Node *let_form = defs->first;
 
     Parse_Node *sym;
@@ -729,17 +714,13 @@ Parse_Node *builtin_let(Parse_Node *args, Symbol_Table *env) {
 
       int lfs = let_form->length();
       if (lfs != 2 && lfs != 1) {
-	fprintf(stderr, "Error: invalid let binding: %s\n"
-		"     : let form length %d\n"
-		, let_form->print().c_str(), lfs);
-	return nullptr;
+	throw runtimeError("Error: invalid let binding: " + let_form->print() + "\n");
       }
      
       sym = let_form->first;
 
-      if (sym->type != PARSE_NODE_SYMBOL) {
-	fprintf(stderr, "Error: invalid let binding: `%s` is not a symbol\n", sym->print().c_str());
-	return nullptr;
+      if (!is_sym(sym)) {
+	throw runtimeError("Error: invalid let binding: `" + sym->print() + "` is not a symbol\n");
       }
       
       if (lfs == 1) {
@@ -755,8 +736,7 @@ Parse_Node *builtin_let(Parse_Node *args, Symbol_Table *env) {
       break;
     }
     default: {
-      fprintf(stderr, "Error: invalid let binding: %s\n", let_form->print().c_str());
-      return nullptr;
+      throw runtimeError("Error: invalid let binding: " + let_form->print() + "\n");
       break;
     }
     }
@@ -764,35 +744,33 @@ Parse_Node *builtin_let(Parse_Node *args, Symbol_Table *env) {
     defs = defs->next;
   }
 
-  if (args->next->first == nullptr) {
+  if (is_empty_list(args->next)) {
     return new Parse_Node{PARSE_NODE_LIST};
   }
 
   Parse_Node *ret;
-  Parse_Node *cur = args->next;  
-  while (cur->first != nullptr) {
+  Parse_Node *cur = args->next;
+  // printf("start evaling let body\n");
+  while (!is_empty_list(cur)) {
+    // printf("      evaling in let body %s\n", cur->first->print().c_str());    
     ret = eval_parse_node(cur->first, let_env);
+    // printf("      evaled to %s\n", ret->print().c_str());
     cur = cur->next;
   }
+  // printf("done evaling let body\n");
+  
   return ret;  
 }
 
 Parse_Node *builtin_if(Parse_Node *args, Symbol_Table *env) {
   int nargs = args->length();
   if (nargs != 2 && nargs != 3) {
-    fprintf(stderr, "Error: incorrect number of arguments\n");
-    return nullptr;
+    throw runtimeError("Error: incorrect number of arguments\n");
   }
 
   Parse_Node *condition = eval_parse_node(args->first, env);
-
-  if (condition->subtype != LITERAL_BOOLEAN) {
-    fprintf(stderr, "Error: if statement condition did not evaluate to boolean\n");
-    return nullptr;
-  }
-
   Parse_Node *ret;
-  if (condition->val.b == true) {
+  if (bool_value(condition)) {
     ret = eval_parse_node(args->next->first, env);
   } else if (nargs == 2) {
     ret = new Parse_Node{PARSE_NODE_LIST};
@@ -803,6 +781,10 @@ Parse_Node *builtin_if(Parse_Node *args, Symbol_Table *env) {
 }
 
 Parse_Node *builtin_print(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() < 1) {
+    throw runtimeError("Error: print takes at least one argument\n");
+  }
+  
   Parse_Node *ret = nullptr;
   while (args->first != nullptr) {
     Parse_Node *earg = eval_parse_node(args->first, env);
@@ -811,7 +793,7 @@ Parse_Node *builtin_print(Parse_Node *args, Symbol_Table *env) {
     args = args->next;
   }
   if (ret == nullptr) {
-    fprintf(stderr, "Error: print takes at least one argument\n");    
+    throw runtimeError("Error: I don't even know how this would be possible\n");
   }
   return ret;
 }
@@ -871,6 +853,8 @@ bool evals_to_true(Parse_Node *node, Symbol_Table *env) {
 }
 
 Parse_Node *builtin_while(Parse_Node *args, Symbol_Table *env) {
+  // printf("in while\n");
+  
   int nargs = args->length();
   if (nargs < 2) {
     fprintf(stderr, "Error: while takes 2+ arguments\n", nargs);
@@ -878,7 +862,7 @@ Parse_Node *builtin_while(Parse_Node *args, Symbol_Table *env) {
   }  
   Parse_Node *condition = args->first;
   Parse_Node *body = args->next;
-  Parse_Node *ret;
+  Parse_Node *ret = nullptr;
 
   while(evals_to_true(condition, env)) {
     Parse_Node *cur = body;
@@ -887,6 +871,15 @@ Parse_Node *builtin_while(Parse_Node *args, Symbol_Table *env) {
       cur = cur->next;
     }
   }
+
+  if (ret == nullptr) {
+    ret = new Parse_Node{PARSE_NODE_LIST};
+  }
+
+  // printf("leaving while\n");
+  // printf("        ret is null: %s\n", ret == nullptr ? "true" : "false");
+  // printf("        while ret: %s\n", ret->print().c_str());
+  
   return ret;
 }
 
@@ -1175,10 +1168,12 @@ Symbol_Table create_base_environment() {
   create_builtin("push", builtin_push, &env);
   create_builtin("append", builtin_append, &env);
   create_builtin("length", builtin_length, &env);
+  create_builtin("quote", builtin_quote, &env);
   create_builtin("empty?", builtin_empty_q, &env);
   create_builtin("~", builtin_string_concatenate, &env);
 
   create_builtin("+", builtin_add, &env);
+  create_builtin("-", builtin_subtract, &env);
   create_builtin("*", builtin_multiply, &env);
   
   create_builtin("=", builtin_equal, &env);

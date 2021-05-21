@@ -3,6 +3,7 @@
 #include "interp.h"
 
 Parse_Node *builtin_add(Parse_Node *args, Symbol_Table *env);
+Parse_Node *builtin_subtract(Parse_Node *args, Symbol_Table *env);
 Parse_Node *builtin_multiply(Parse_Node *args, Symbol_Table *env);
 Parse_Node *builtin_greater_than_equal(Parse_Node *args, Symbol_Table *env);
 Parse_Node *builtin_greater_than(Parse_Node *args, Symbol_Table *env);

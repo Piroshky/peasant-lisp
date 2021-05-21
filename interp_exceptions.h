@@ -1,3 +1,4 @@
+#pragma once
 struct returnException: public std::exception {
   Parse_Node *ret;
   const char * what () const throw () {
