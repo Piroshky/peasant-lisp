@@ -30,7 +30,6 @@
 		  (set m y)))
     m))
 
-
 (defun min (number &rest more-numbers)
   (unless more-numbers (return number))
   (let ((m number))
@@ -38,3 +37,9 @@
 	      (if (< y m)
 		  (set m y)))
     m))
+
+(defmacro inc (sym &opt (step 1))
+  `(set ,sym (+ ,sym ,step)))
+
+(defmacro dec (sym &opt (step 1))
+  `(set ,sym (- ,sym ,step)))

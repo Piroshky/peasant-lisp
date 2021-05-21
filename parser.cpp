@@ -216,32 +216,26 @@ std::string Parse_Node::print() {
     }
     list += ")";
     return list;
-    break;
   }
 
   case PARSE_NODE_SYMBOL: {
     return token.name;
-    break;
   }
     
   case PARSE_NODE_LITERAL: {
     switch (subtype) {
     case LITERAL_INTEGER: {
       return std::to_string(val.u64);
-      break;
     }
     case LITERAL_FLOAT: {
-      return std::to_string(val.dub);
-      break;
+      return std::to_string(val.dub);     
     }
       
     case LITERAL_BOOLEAN: {
       return (val.b ? "true" : "false");
-      break;
     }
     case LITERAL_STRING: {
       return token.name;
-      break;
     }
     }
   }
@@ -267,8 +261,11 @@ std::string Parse_Node::print() {
       return ",@" + first->print();      
       break;
     }
-    }
+    }    
+  }
     
+  case PARSE_NODE_ERROR: {
+    return "[ERROR]";   
   }
     
   default:
