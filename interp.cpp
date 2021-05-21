@@ -139,17 +139,40 @@ Parse_Node *expand_splice(Parse_Node *node, Symbol_Table *env) {
   return ret;
 }
 
+// Splices will destroy the definition of functions and macros,
+// instead of returning a copy of the original structure each time
+// expand_splice is called, we only do it for function/macro applications
+Parse_Node *copy_node(Parse_Node *node) {
+  Parse_Node *new_node = new Parse_Node{};
+  *new_node = *node;
+  if (new_node->first != nullptr) {    
+    new_node->first = copy_node(new_node->first);
+  }
+  if (new_node->next != nullptr) {
+    new_node->next = copy_node(new_node->next);
+  }
+  return new_node;
+}
+
+
+Parse_Node *builtin_copy(Parse_Node *args, Symbol_Table *env) {
+  if (args->length() != 1) {
+    throw runtimeError("Errror: copy takes exactly one argument\n");
+  }
+  Parse_Node *earg = eval_parse_node(args->first, env);  
+  return copy_node(earg);
+}
+
 
 Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool is_fun) {
   // if is_fun we evaluate the arguments, if not is_fun then it's a macro so no argument evaluation
   Symbol_Table *fun_env = new Symbol_Table(env);
   
-  // bind given arguments to symbols in fun-params
-  Parse_Node *cur_param = fun->first;
-  Parse_Node *cur_arg = node->next;
-
   // printf("apply_fun: applying args to %s %s\n", is_fun ? "function" : "macro", fun->token.name.c_str());
   
+  // bind given arguments to symbols in fun-params in the fun_env
+  Parse_Node *cur_param = fun->first;
+  Parse_Node *cur_arg = node->next;  
   while (!is_empty_list(cur_param)) {
     Parse_Node *param = cur_param->first;
     Parse_Node *arg;
@@ -228,7 +251,7 @@ Parse_Node *apply_fun(Parse_Node *fun, Parse_Node *node, Symbol_Table *env, bool
   // evaluate the body
   // printf("apply_fun: evaling body %s %s\n", is_fun ? "function" : "macro", fun->token.name.c_str());
   
-  Parse_Node *cur = fun->next;
+  Parse_Node *cur = copy_node(fun->next);
   
   Parse_Node *ret;
   while (!is_empty_list(cur)) {
@@ -256,7 +279,8 @@ Parse_Node *eval_backtick(Parse_Node *node, Symbol_Table *env) {
   return node;
 }
 
-Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env) {  
+Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env) {
+  Parse_Node *first = node;
   node = expand_splice(node, env);  
   Parse_Node *ret = new Parse_Node{PARSE_NODE_LIST};
   Parse_Node *list = ret;
@@ -265,7 +289,7 @@ Parse_Node *eval_backtick_list(Parse_Node *node, Symbol_Table *env) {
     list->next = new Parse_Node{PARSE_NODE_LIST};
     list = list->next;
     node = node->next;
-  }  
+  }
   return ret;
 }
 
@@ -278,15 +302,38 @@ Parse_Node *expand_eval_macro(Parse_Node *macro, Parse_Node *node, Symbol_Table 
   }
   
   Parse_Node *ret;
-  ret = eval_parse_node(expand, env);
+  
   // nah...
-  // try {
-    
-  // } catch (returnException e) {
-  //   return e.ret;
-  // }  
+  try {
+    ret = eval_parse_node(expand, env);  
+  } catch (returnException e) {
+    return e.ret;
+  }  
   
   return ret;
+}
+
+Parse_Node *builtin_inspect_macro(Parse_Node *args, Symbol_Table *env) {
+  Parse_Node *sym = args->first;
+  printf("\n\nmacro: %s\n", sym->print().c_str());
+  if (!is_sym(sym)) {
+    throw runtimeError("Error: inspect-macro requires a symbol for its argument\n");
+  }
+
+  Parse_Node *macro = env->lookup(sym->token.name);
+  if (macro == nullptr) {
+    throw runtimeError("Error: could not find macro named " + macro->print() + "\n");
+  }
+  
+  if (macro->subtype != FUNCTION_MACRO) {
+    throw runtimeError("Error: inspect-macro requires a macro for its argument\n");
+  }
+  
+  // printf("Inspecting macro %s\n", macro->print().c_str());
+  // printf("    params: %s\n", macro->first->print().c_str());
+  // printf("      body: %s\n", macro->next->print().c_str());
+  
+  return new Parse_Node{PARSE_NODE_LIST};
 }
 
 Parse_Node *builtin_expand(Parse_Node *args, Symbol_Table *env) {
@@ -1160,6 +1207,8 @@ Symbol_Table create_base_environment() {
   create_builtin("string=", builtin_symbol_equal, &env);
   create_builtin("get-int", builtin_get_int, &env);
 
+  create_builtin("inspect-macro", builtin_inspect_macro, &env);
+
   create_builtin("list", builtin_list, &env);
   create_builtin("first", builtin_first, &env);
   create_builtin("last", builtin_last, &env);
@@ -1171,6 +1220,7 @@ Symbol_Table create_base_environment() {
   create_builtin("quote", builtin_quote, &env);
   create_builtin("empty?", builtin_empty_q, &env);
   create_builtin("~", builtin_string_concatenate, &env);
+  create_builtin("copy", builtin_copy, &env);
 
   create_builtin("+", builtin_add, &env);
   create_builtin("-", builtin_subtract, &env);
